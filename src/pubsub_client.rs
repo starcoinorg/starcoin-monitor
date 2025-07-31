@@ -9,8 +9,6 @@ use starcoin_rpc_client::RpcClient;
 use tokio::io::AsyncBufReadExt;
 use tracing::info;
 
-use crate::types::TransactionStatus as MonitorTransactionStatus;
-
 pub struct PubSubClient {
     client: RpcClient,
 }

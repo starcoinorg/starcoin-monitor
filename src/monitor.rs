@@ -6,7 +6,7 @@ use crate::{types::Transaction, MonitorDispatcher};
 use anyhow::{ensure, Result};
 use starcoin_rpc_client::RpcClient;
 use std::sync::Arc;
-
+use std::thread::JoinHandle;
 use tracing::info;
 
 use crate::{config::Config, pubsub_client::PubSubClient};
@@ -25,7 +25,7 @@ impl Monitor {
         })
     }
 
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self) -> Result<Vec<JoinHandle<()>>> {
         info!("Monitor::run | entered");
 
         let pubsub_client1 = self.pubsub_client.clone();
@@ -46,11 +46,7 @@ impl Monitor {
         handles.push(event_watch_handle);
         handles.push(block_watch_handle);
 
-        for handle in handles {
-            handle.join().expect("Thread panicked");
-        }
-
         info!("Monitor::run | Exited");
-        Ok(())
+        Ok(handles)
     }
 }

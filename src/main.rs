@@ -9,6 +9,7 @@ mod pubsub_client;
 mod telegram;
 mod types;
 
+use crate::telegram::TelegramBot;
 use anyhow::Result;
 use clap::Parser;
 use monitor_dispatcher::*;
@@ -51,11 +52,19 @@ fn main() -> Result<()> {
     let config = Arc::new(config::Config::load()?);
     info!("Configuration loaded successfully");
 
+    let tg_bot = TelegramBot::new(config.clone());
+
     // do some compute-heavy work or call synchronous code
     let monitor = monitor::Monitor::new(Arc::new(FakeMonitorDispatcher {}), config)
         .expect("Failed to create monitor.");
 
-    monitor.run()?;
+    let mut handles = monitor.run()?;
+    handles.push(tg_bot.run()?);
+
+    // Join handles
+    for handle in handles {
+        handle.join().expect("Thread panicked");
+    }
 
     info!("Stopping Starcoin Monitor Service...");
     Ok(())

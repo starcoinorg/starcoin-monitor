@@ -2,61 +2,64 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use async_trait::async_trait;
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use teloxide::{prelude::*, types::Message, Bot};
 use tracing::{error, info};
 
 use crate::{
     config::Config,
-    database::Database,
     monitor_dispatcher::MonitorDispatcher,
     types::{AccountBalance, Transaction, TransactionSummary},
 };
 
 #[derive(Clone)]
 pub struct TelegramBot {
-    config: Config,
-    // db: Database,
-    bot: Bot,
+    config: Arc<Config>,
+    bot: Arc<Bot>,
 }
 
 impl TelegramBot {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Arc<Config>) -> Self {
         let bot = Bot::new(&config.telegram_bot_token);
-        Self { config, bot }
+        Self {
+            config: config.clone(),
+            bot: Arc::new(bot),
+        }
     }
 
-    pub async fn run(&self) -> Result<()> {
-        info!("Starting Telegram Bot...");
+    pub fn run(&self) -> Result<JoinHandle<()>> {
+        info!("TelegramBot::run | entered");
 
         let bot = self.bot.clone();
         let config = self.config.clone();
-        // let db = self.db.clone();
+        Ok(std::thread::spawn(move || {
+            // let db = self.db.clone();
+            let handler = Update::filter_message().branch(
+                dptree::filter(|msg: Message| msg.text().is_some()).endpoint(
+                    move |msg: Message| {
+                        let config = config.clone();
+                        // let db = db.clone();
 
-        let handler = Update::filter_message().branch(
-            dptree::filter(|msg: Message| msg.text().is_some()).endpoint(move |msg: Message| {
-                let _bot = bot.clone();
-                let config = config.clone();
-                // let db = db.clone();
+                        async move {
+                            let text = msg.text().unwrap();
+                            let chat_id = msg.chat.id;
+                            let _user_id =
+                                msg.from().map(|u| u.id.0.to_string()).unwrap_or_default();
 
-                async move {
-                    let text = msg.text().unwrap();
-                    let chat_id = msg.chat.id;
-                    let _user_id = msg.from().map(|u| u.id.0.to_string()).unwrap_or_default();
+                            let telegram_bot = TelegramBot::new(config.clone());
+                            telegram_bot.handle_command(text, chat_id, _user_id).await
+                        }
+                    },
+                ),
+            );
 
-                    let telegram_bot = TelegramBot::new(config);
-                    telegram_bot.handle_command(text, chat_id, _user_id).await
-                }
-            }),
-        );
-
-        Dispatcher::builder(self.bot.clone(), handler)
-            .build()
-            .dispatch()
-            .await;
-
-        Ok(())
+            futures::executor::block_on(
+                Dispatcher::builder(bot.clone(), handler).build().dispatch(),
+            );
+            info!("TelegramBot::run | Exited");
+        }))
     }
 
     async fn handle_command(&self, text: &str, chat_id: ChatId, _user_id: String) -> Result<()> {

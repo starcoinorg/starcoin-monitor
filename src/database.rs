@@ -14,59 +14,60 @@ pub struct Database {
 
 impl Database {
     pub async fn new(database_url: &str) -> Result<Self> {
-        let pool = SqlitePool::connect(database_url).await?;
-
-        // Create tables if they don't exist
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS transactions (
-                hash TEXT PRIMARY KEY,
-                block_number INTEGER NOT NULL,
-                timestamp TEXT NOT NULL,
-                from_address TEXT NOT NULL,
-                to_address TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                token TEXT NOT NULL,
-                gas_used INTEGER NOT NULL,
-                gas_price INTEGER NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS account_balances (
-                address TEXT NOT NULL,
-                balance INTEGER NOT NULL,
-                token TEXT NOT NULL,
-                last_updated TEXT NOT NULL,
-                PRIMARY KEY (address, token)
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS large_transaction_alerts (
-                transaction_hash TEXT PRIMARY KEY,
-                alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
-                sent_at TEXT,
-                created_at TEXT NOT NULL
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await?;
-
-        Ok(Self {
-            pool: Arc::new(pool),
-        })
+        // let pool = SqlitePool::connect(database_url).await?;
+        //
+        // // Create tables if they don't exist
+        // sqlx::query(
+        //     r#"
+        //     CREATE TABLE IF NOT EXISTS transactions (
+        //         hash TEXT PRIMARY KEY,
+        //         block_number INTEGER NOT NULL,
+        //         timestamp TEXT NOT NULL,
+        //         from_address TEXT NOT NULL,
+        //         to_address TEXT NOT NULL,
+        //         amount INTEGER NOT NULL,
+        //         token TEXT NOT NULL,
+        //         gas_used INTEGER NOT NULL,
+        //         gas_price INTEGER NOT NULL,
+        //         status TEXT NOT NULL,
+        //         created_at TEXT NOT NULL
+        //     )
+        //     "#,
+        // )
+        // .execute(&pool)
+        // .await?;
+        //
+        // sqlx::query(
+        //     r#"
+        //     CREATE TABLE IF NOT EXISTS account_balances (
+        //         address TEXT NOT NULL,
+        //         balance INTEGER NOT NULL,
+        //         token TEXT NOT NULL,
+        //         last_updated TEXT NOT NULL,
+        //         PRIMARY KEY (address, token)
+        //     )
+        //     "#,
+        // )
+        // .execute(&pool)
+        // .await?;
+        //
+        // sqlx::query(
+        //     r#"
+        //     CREATE TABLE IF NOT EXISTS large_transaction_alerts (
+        //         transaction_hash TEXT PRIMARY KEY,
+        //         alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        //         sent_at TEXT,
+        //         created_at TEXT NOT NULL
+        //     )
+        //     "#,
+        // )
+        // .execute(&pool)
+        // .await?;
+        //
+        // Ok(Self {
+        //     pool: Arc::new(pool),
+        // })
+        unimplemented!()
     }
 
     pub async fn save_transaction(&self, transaction: &Transaction) -> Result<()> {

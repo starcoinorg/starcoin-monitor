@@ -23,8 +23,9 @@ impl Config {
             starcoin_rpc_url: env::var("STARCOIN_RPC_URL")
                 .unwrap_or_else(|_| "ws://main.seed.starcoin.org:9870".to_string()),
             telegram_bot_token: env::var("TELEGRAM_BOT_TOKEN")
-                .expect("TELEGRAM_BOT_TOKEN must be set"),
-            telegram_chat_id: env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID must be set"),
+                .unwrap_or_else(|_| "test_bot_token".to_string()),
+            telegram_chat_id: env::var("TELEGRAM_CHAT_ID")
+                .unwrap_or_else(|_| "test_chat_id".to_string()),
             database_url: env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite:starcoin_monitor.db".to_string()),
             min_transaction_amount: env::var("MIN_TRANSACTION_AMOUNT")
@@ -38,5 +39,16 @@ impl Config {
         };
 
         Ok(config)
+    }
+
+    pub fn localhost() -> Self {
+        Self {
+            starcoin_rpc_url: "ws://localhost:9870".to_string(),
+            telegram_bot_token: "".to_string(),
+            telegram_chat_id: "".to_string(),
+            database_url: "sqlite:starcoin_monitor.db".to_string(),
+            min_transaction_amount: 1_000_000_000,
+            block_subscription_interval: 1000,
+        }
     }
 }

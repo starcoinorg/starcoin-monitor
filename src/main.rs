@@ -5,12 +5,14 @@ mod config;
 mod database;
 mod monitor;
 mod monitor_dispatcher;
+mod pubsub_client;
 mod telegram;
 mod types;
 
 use anyhow::Result;
 use clap::Parser;
 use monitor_dispatcher::*;
+use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 use std::sync::Arc;
 use tracing::{info, Level};
 
@@ -22,8 +24,19 @@ struct Args {
     log_level: Level,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+struct FakeMonitorDispatcher {}
+
+impl MonitorDispatcher for FakeMonitorDispatcher {
+    fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
+        todo!()
+    }
+
+    fn dispatch_block(&self, block: BlockView) -> Result<()> {
+        todo!()
+    }
+}
+
+fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
@@ -35,20 +48,15 @@ async fn main() -> Result<()> {
     info!("Starting Starcoin Monitor Service...");
 
     // Load configuration
-    let config = config::Config::load()?;
+    let config = Arc::new(config::Config::load()?);
     info!("Configuration loaded successfully");
 
-    // Initialize database
-    let db = database::Database::new(&config.database_url).await?;
-    info!("Database initialized successfully");
+    // do some compute-heavy work or call synchronous code
+    let monitor = monitor::Monitor::new(Arc::new(FakeMonitorDispatcher {}), config)
+        .expect("Failed to create monitor.");
 
-    let telegram_bot = Arc::new(telegram::TelegramBot::new(config.clone(), db.clone()));
+    monitor.run()?;
 
-    // Start the monitoring service
-    let monitor = monitor::Monitor::new(telegram_bot.clone(), config.clone(), db.clone());
-
-    // Run both services concurrently
-    tokio::try_join!(monitor.run(), telegram_bot.run())?;
-
+    info!("Stopping Starcoin Monitor Service...");
     Ok(())
 }

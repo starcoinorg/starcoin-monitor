@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 use teloxide::{prelude::*, types::Message, Bot};
 use tracing::{error, info};
 
@@ -16,15 +17,14 @@ use crate::{
 #[derive(Clone)]
 pub struct TelegramBot {
     config: Config,
-    db: Database,
+    // db: Database,
     bot: Bot,
 }
 
 impl TelegramBot {
-    pub fn new(config: Config, db: Database) -> Self {
+    pub fn new(config: Config) -> Self {
         let bot = Bot::new(&config.telegram_bot_token);
-
-        Self { config, db, bot }
+        Self { config, bot }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -32,20 +32,20 @@ impl TelegramBot {
 
         let bot = self.bot.clone();
         let config = self.config.clone();
-        let db = self.db.clone();
+        // let db = self.db.clone();
 
         let handler = Update::filter_message().branch(
             dptree::filter(|msg: Message| msg.text().is_some()).endpoint(move |msg: Message| {
                 let _bot = bot.clone();
                 let config = config.clone();
-                let db = db.clone();
+                // let db = db.clone();
 
                 async move {
                     let text = msg.text().unwrap();
                     let chat_id = msg.chat.id;
                     let _user_id = msg.from().map(|u| u.id.0.to_string()).unwrap_or_default();
 
-                    let telegram_bot = TelegramBot::new(config, db);
+                    let telegram_bot = TelegramBot::new(config);
                     telegram_bot.handle_command(text, chat_id, _user_id).await
                 }
             }),
@@ -126,30 +126,30 @@ impl TelegramBot {
             return Ok(());
         }
 
-        match self
-            .db
-            .get_transactions_by_block_range(start_block, end_block)
-            .await
-        {
-            Ok(transactions) => {
-                if transactions.is_empty() {
-                    let message = format!(
-                        "📭 No transactions found in blocks {} to {}",
-                        start_block, end_block
-                    );
-                    self.send_message_to_chat(chat_id, &message).await?;
-                } else {
-                    let message =
-                        self.format_transactions_list(&transactions, start_block, end_block);
-                    self.send_message_to_chat(chat_id, &message).await?;
-                }
-            }
-            Err(e) => {
-                error!("Error fetching transactions: {}", e);
-                let message = "❌ Error fetching transactions from database";
-                self.send_message_to_chat(chat_id, message).await?;
-            }
-        }
+        // match self
+        //     .db
+        //     .get_transactions_by_block_range(start_block, end_block)
+        //     .await
+        // {
+        //     Ok(transactions) => {
+        //         if transactions.is_empty() {
+        //             let message = format!(
+        //                 "📭 No transactions found in blocks {} to {}",
+        //                 start_block, end_block
+        //             );
+        //             self.send_message_to_chat(chat_id, &message).await?;
+        //         } else {
+        //             let message =
+        //                 self.format_transactions_list(&transactions, start_block, end_block);
+        //             self.send_message_to_chat(chat_id, &message).await?;
+        //         }
+        //     }
+        //     Err(e) => {
+        //         error!("Error fetching transactions: {}", e);
+        //         let message = "❌ Error fetching transactions from database";
+        //         self.send_message_to_chat(chat_id, message).await?;
+        //     }
+        // }
 
         Ok(())
     }
@@ -162,39 +162,39 @@ impl TelegramBot {
             return Ok(());
         }
 
-        let start_block = match args[0].parse::<u64>() {
-            Ok(n) => n,
-            Err(_) => {
-                let message = "❌ Invalid start block number";
-                self.send_message_to_chat(chat_id, message).await?;
-                return Ok(());
-            }
-        };
+        // let start_block = match args[0].parse::<u64>() {
+        //     Ok(n) => n,
+        //     Err(_) => {
+        //         let message = "❌ Invalid start block number";
+        //         self.send_message_to_chat(chat_id, message).await?;
+        //         return Ok(());
+        //     }
+        // };
+        //
+        // let end_block = match args[1].parse::<u64>() {
+        //     Ok(n) => n,
+        //     Err(_) => {
+        //         let message = "❌ Invalid end block number";
+        //         self.send_message_to_chat(chat_id, message).await?;
+        //         return Ok(());
+        //     }
+        // };
 
-        let end_block = match args[1].parse::<u64>() {
-            Ok(n) => n,
-            Err(_) => {
-                let message = "❌ Invalid end block number";
-                self.send_message_to_chat(chat_id, message).await?;
-                return Ok(());
-            }
-        };
-
-        match self
-            .db
-            .get_transaction_summary(start_block, end_block)
-            .await
-        {
-            Ok(summary) => {
-                let message = self.format_transaction_summary(&summary);
-                self.send_message_to_chat(chat_id, &message).await?;
-            }
-            Err(e) => {
-                error!("Error fetching summary: {}", e);
-                let message = "❌ Error fetching transaction summary";
-                self.send_message_to_chat(chat_id, message).await?;
-            }
-        }
+        // match self
+        //     .db
+        //     .get_transaction_summary(start_block, end_block)
+        //     .await
+        // {
+        //     Ok(summary) => {
+        //         let message = self.format_transaction_summary(&summary);
+        //         self.send_message_to_chat(chat_id, &message).await?;
+        //     }
+        //     Err(e) => {
+        //         error!("Error fetching summary: {}", e);
+        //         let message = "❌ Error fetching transaction summary";
+        //         self.send_message_to_chat(chat_id, message).await?;
+        //     }
+        // }
 
         Ok(())
     }
@@ -206,27 +206,27 @@ impl TelegramBot {
             return Ok(());
         }
 
-        let address = args[0];
-        let token = args.get(1).unwrap_or(&"STC");
-
-        match self.db.get_account_balance(address, token).await {
-            Ok(Some(balance)) => {
-                let message = self.format_account_balance(&balance);
-                self.send_message_to_chat(chat_id, &message).await?;
-            }
-            Ok(None) => {
-                let message = format!(
-                    "📭 No balance found for address {} and token {}",
-                    address, token
-                );
-                self.send_message_to_chat(chat_id, &message).await?;
-            }
-            Err(e) => {
-                error!("Error fetching balance: {}", e);
-                let message = "❌ Error fetching account balance";
-                self.send_message_to_chat(chat_id, message).await?;
-            }
-        }
+        // let address = args[0];
+        // let token = args.get(1).unwrap_or(&"STC");
+        //
+        // match self.db.get_account_balance(address, token).await {
+        //     Ok(Some(balance)) => {
+        //         let message = self.format_account_balance(&balance);
+        //         self.send_message_to_chat(chat_id, &message).await?;
+        //     }
+        //     Ok(None) => {
+        //         let message = format!(
+        //             "📭 No balance found for address {} and token {}",
+        //             address, token
+        //         );
+        //         self.send_message_to_chat(chat_id, &message).await?;
+        //     }
+        //     Err(e) => {
+        //         error!("Error fetching balance: {}", e);
+        //         let message = "❌ Error fetching account balance";
+        //         self.send_message_to_chat(chat_id, message).await?;
+        //     }
+        // }
 
         Ok(())
     }
@@ -352,9 +352,12 @@ Need help? Contact the administrator.
     }
 }
 
-#[async_trait]
 impl MonitorDispatcher for TelegramBot {
-    async fn dispatch_msg(&self, msg: String) -> anyhow::Result<()> {
-        self.send_message(msg.as_str()).await
+    fn dispatch_event(&self, _event: &TransactionEventView) -> Result<()> {
+        todo!()
+    }
+
+    fn dispatch_block(&self, _block: BlockView) -> Result<()> {
+        todo!()
     }
 }

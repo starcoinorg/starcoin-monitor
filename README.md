@@ -9,6 +9,23 @@ A comprehensive monitoring service for the Starcoin blockchain that tracks large
 - 🤖 **Interactive Bot**: Telegram bot with commands to query transaction data
 - 💾 **Local Database**: Stores transaction data locally using SQLite
 - 📊 **Query Capabilities**: Query transactions by block range, get summaries, and check balances
+- 🚀 **PubSub Support**: Real-time event-driven monitoring using WebSocket subscriptions
+
+## Monitoring Modes
+
+### Polling Mode (Default)
+Traditional polling-based monitoring that periodically queries the blockchain.
+
+```bash
+cargo run --release
+```
+
+### PubSub Mode
+Event-driven monitoring using WebSocket subscriptions for real-time updates.
+
+```bash
+cargo run --release -- --pubsub
+```
 
 ## Telegram Bot Commands
 
@@ -58,24 +75,38 @@ DATABASE_URL=sqlite:starcoin_monitor.db
 
 # Monitoring Configuration
 MIN_TRANSACTION_AMOUNT=1000000000  # 1 STC in nano units
-BLOCK_SUBSCRIPTION_INTERVAL=1000   # milliseconds
+BLOCK_SUBSCRIPTION_INTERVAL=1000   # milliseconds (polling mode only)
 ```
 
 ## Usage
 
-1. **Start the monitoring service**
-   ```bash
-   cargo run --release
-   ```
+### Polling Mode
+```bash
+# Start with default polling mode
+cargo run --release
 
-2. **Use the Telegram bot**
-   - Send `/start` to get help
-   - Use commands to query transaction data
-   - Receive automatic alerts for large transactions
+# With custom log level
+cargo run --release -- --log-level debug
+```
+
+### PubSub Mode
+```bash
+# Start with PubSub mode for real-time monitoring
+cargo run --release -- --pubsub
+
+# With debug logging
+cargo run --release -- --pubsub --log-level debug
+```
+
+### Using the Telegram bot
+- Send `/start` to get help
+- Use commands to query transaction data
+- Receive automatic alerts for large transactions
 
 ## Architecture
 
 - **Monitor Service**: Continuously polls Starcoin RPC for new blocks and transactions
+- **PubSub Service**: Real-time event-driven monitoring using WebSocket subscriptions
 - **Database Layer**: SQLite database for storing transaction data and alerts
 - **Telegram Bot**: Interactive bot for querying data and receiving alerts
 - **Configuration**: Environment-based configuration management
@@ -100,6 +131,11 @@ The service uses structured logging with different levels:
 - `warn`: Warning messages
 - `error`: Error messages
 
+## Documentation
+
+- [Usage Guide](USAGE.md) - Detailed usage instructions
+- [PubSub Guide](PUBSUB_USAGE.md) - PubSub mode documentation
+
 ## Contributing
 
 1. Fork the repository
@@ -121,7 +157,7 @@ For issues and questions:
 
 ## Roadmap
 
-- [ ] WebSocket subscription for real-time updates
+- [x] WebSocket subscription for real-time updates
 - [ ] Support for multiple tokens
 - [ ] Advanced filtering options
 - [ ] Web dashboard

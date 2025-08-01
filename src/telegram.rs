@@ -380,27 +380,30 @@ Need help? Contact the administrator.
 
     fn escape_markdown_v2(text: &str) -> String {
         // Characters that need to be escaped in MarkdownV2
-        let special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+        let special_chars = [
+            '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.',
+            '!',
+        ];
         let mut escaped = String::new();
-        
+
         for ch in text.chars() {
             if special_chars.contains(&ch) {
                 escaped.push('\\');
             }
             escaped.push(ch);
         }
-        
+
         escaped
     }
 
     async fn send_message_to_chat(&self, chat_id: ChatId, message: &str) -> Result<()> {
         // Escape the message for MarkdownV2
         let escaped_message = Self::escape_markdown_v2(message);
-        
+
         // Retry mechanism for network errors
         let mut retries = 0;
         let max_retries = 3;
-        
+
         loop {
             match self
                 .bot
@@ -413,8 +416,14 @@ Need help? Contact the administrator.
                     return Ok(());
                 }
                 Err(e) => {
-                    error!("Failed to send message to chat {} (attempt {}/{}): {}", chat_id, retries + 1, max_retries, e);
-                    
+                    error!(
+                        "Failed to send message to chat {} (attempt {}/{}): {}",
+                        chat_id,
+                        retries + 1,
+                        max_retries,
+                        e
+                    );
+
                     if retries >= max_retries {
                         // Try sending without markdown as last resort
                         match self.bot.send_message(chat_id, message).await {
@@ -423,12 +432,19 @@ Need help? Contact the administrator.
                                 return Ok(());
                             }
                             Err(e2) => {
-                                error!("Failed to send message to chat {} (without markdown): {}", chat_id, e2);
-                                return Err(anyhow::anyhow!("Failed to send message after {} retries: {}", max_retries, e));
+                                error!(
+                                    "Failed to send message to chat {} (without markdown): {}",
+                                    chat_id, e2
+                                );
+                                return Err(anyhow::anyhow!(
+                                    "Failed to send message after {} retries: {}",
+                                    max_retries,
+                                    e
+                                ));
                             }
                         }
                     }
-                    
+
                     // Wait before retrying
                     tokio::time::sleep(tokio::time::Duration::from_secs(2 * (retries + 1))).await;
                     retries += 1;
@@ -438,22 +454,14 @@ Need help? Contact the administrator.
     }
 }
 
+#[async_trait::async_trait]
 impl MonitorDispatcher for TelegramBot {
-    fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
-        futures::executor::block_on(async {
-            self.send_message(format!("event: {:?}", event).as_str())
-                .await
-                .expect("should send message");
-        });
-        Ok(())
+    async fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
+        self.send_message(format!("event: {:?}", event).as_str())
+            .await
     }
 
-    fn dispatch_block(&self, block: &BlockView) -> Result<()> {
-        futures::executor::block_on(async {
-            self.send_message(format!("block: {:?}", block).as_str())
-                .await
-                .expect("should send message");
-        });
-        Ok(())
+    async fn dispatch_block(&self, block: &BlockView) -> Result<()> {
+        self.send_message(format!("block: {:?}", block).as_str()).await
     }
 }

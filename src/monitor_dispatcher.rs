@@ -3,8 +3,9 @@
 
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 
+#[async_trait::async_trait]
 pub trait MonitorDispatcher: Send + Sync {
-    fn dispatch_event(&self, event: &TransactionEventView) -> anyhow::Result<()>;
+    async fn dispatch_event(&self, event: &TransactionEventView) -> anyhow::Result<()>;
 
-    fn dispatch_block(&self, block: &BlockView) -> anyhow::Result<()>;
+    async fn dispatch_block(&self, block: &BlockView) -> anyhow::Result<()>;
 }

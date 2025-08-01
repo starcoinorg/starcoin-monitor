@@ -12,8 +12,6 @@ mod types;
 use crate::telegram::TelegramBot;
 use anyhow::Result;
 use clap::Parser;
-use monitor_dispatcher::*;
-use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 use std::sync::Arc;
 use tracing::{info, Level};
 

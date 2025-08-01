@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{config::Config, monitor_dispatcher::MonitorDispatcher, pubsub_client::PubSubClient};
-use anyhow::{ensure, Result};
+use anyhow::Result;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tracing::info;
@@ -29,9 +29,9 @@ impl Monitor {
         let event_watch_handle = std::thread::spawn(move || {
             pubsub_client1
                 .subscribe_new_events(|evt| {
-                    dispatcher1
-                        .dispatch_event(evt)
-                        .expect("dispatcher should work");
+                    let dispatcher = dispatcher1.clone();
+                    let evt_clone = evt.clone();
+                    tokio::spawn(async move { dispatcher.dispatch_event(&evt_clone).await });
                 })
                 .expect("should subscribe new events");
         });
@@ -40,7 +40,11 @@ impl Monitor {
         let dispatcher2 = self.dispatcher.clone();
         let block_watch_handle = std::thread::spawn(move || {
             pubsub_client2
-                .subscribe_new_blocks(|block_view| dispatcher2.dispatch_block(block_view).unwrap())
+                .subscribe_new_blocks(|evt| {
+                    let dispatcher = dispatcher2.clone();
+                    let evt_clone = evt.clone();
+                    tokio::spawn(async move { dispatcher.dispatch_block(&evt_clone).await });
+                })
                 .expect("should subscribe new events");
         });
 

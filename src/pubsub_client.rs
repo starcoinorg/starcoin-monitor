@@ -20,6 +20,8 @@ fn blocking_display_notification<T, F>(
     F: Fn(&T) -> String,
 {
     let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_io()
+        .enable_time()
         .build()
         .expect("should able to create tokio runtime");
     let stdin = tokio::io::stdin();

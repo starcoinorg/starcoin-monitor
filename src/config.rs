@@ -44,16 +44,4 @@ impl Config {
 
         Ok(config)
     }
-
-    pub fn localhost() -> Self {
-        Self {
-            starcoin_rpc_url: "ws://127.0.0.1:9870".to_string(),
-            telegram_bot_token: "8027205533:AAFRvlei8X1kjN4tOsy-oA-MxVBiPHnrCD4".to_string(),
-            telegram_proxy: Some("http://127.0.0.1:7890".to_string()),
-            telegram_chat_id: "1924440643".to_string(),
-            database_url: "sqlite:starcoin_monitor.db".to_string(),
-            min_transaction_amount: 1_000_000_000,
-            block_subscription_interval: 1000,
-        }
-    }
 }

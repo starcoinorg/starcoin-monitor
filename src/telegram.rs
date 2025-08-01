@@ -1,8 +1,12 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
+use starcoin_types::account_config::{genesis_address, WithdrawEvent};
+use starcoin_types::identifier::Identifier;
+use starcoin_types::language_storage::{StructTag, TypeTag};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use teloxide::{prelude::*, types::Message, Bot};
@@ -454,14 +458,52 @@ Need help? Contact the administrator.
     }
 }
 
+fn get_withdraw_amount(txn_event_view: &TransactionEventView) -> Result<Option<u128>> {
+    let struct_type_tag = match txn_event_view.type_tag.0.clone() {
+        TypeTag::Struct(struct_tag) => struct_tag,
+        _ => return Ok(None),
+    };
+    let withdraw_event_tag = StructTag {
+        address: genesis_address(),
+        module: Identifier::from_str("Account")?,
+        name: Identifier::from_str("WithdrawEvent")?,
+        type_params: vec![],
+    };
+
+    if *struct_type_tag != withdraw_event_tag {
+        return Ok(None);
+    };
+
+    let withdraw_event = WithdrawEvent::try_from_bytes(txn_event_view.data.0.as_slice())?;
+    Ok(Some(withdraw_event.amount()))
+}
+
 #[async_trait::async_trait]
 impl MonitorDispatcher for TelegramBot {
     async fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
-        self.send_message(format!("event: {:?}", event).as_str())
-            .await
+        let withdraw_amount = get_withdraw_amount(event)?;
+        if withdraw_amount.is_none()
+            || withdraw_amount.unwrap() < self.config.min_transaction_amount
+        {
+            return Ok(());
+        };
+
+        let type_tag = match event.type_tag.0.clone() {
+            TypeTag::Struct(struct_tag) => struct_tag,
+            _ => return Ok(()),
+        };
+
+        let withdraw_amount = withdraw_amount.unwrap();
+        let msg = format!(
+            "⚠️ Warning: There has an over-limit transaction event being executed here. block number: {:?}, txn_hash: {}, event type: {:?}, withdraw_amount: {}",
+            event.block_number.unwrap().0, event.block_hash.unwrap().to_hex_literal(), type_tag.to_canonical_string(), withdraw_amount / 1e9 as u128
+        );
+        self.send_message(msg.as_str()).await
     }
 
-    async fn dispatch_block(&self, block: &BlockView) -> Result<()> {
-        self.send_message(format!("block: {:?}", block).as_str()).await
+    async fn dispatch_block(&self, _block: &BlockView) -> Result<()> {
+        //self.send_message(format!("block: {:?}", block).as_str())
+        //    .await
+        Ok(())
     }
 }

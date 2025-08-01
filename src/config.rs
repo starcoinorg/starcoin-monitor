@@ -11,8 +11,7 @@ pub struct Config {
     pub telegram_bot_token: String,
     pub telegram_chat_id: String,
     pub telegram_proxy: Option<String>,
-    pub database_url: String,
-    pub min_transaction_amount: u64,
+    pub min_transaction_amount: u128,
     pub block_subscription_interval: u64,
 }
 
@@ -30,12 +29,10 @@ impl Config {
                 env::VarError::NotPresent => Ok(None),
                 _ => Err(e),
             })?,
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:starcoin_monitor.db".to_string()),
             min_transaction_amount: env::var("MIN_TRANSACTION_AMOUNT")
                 .unwrap_or_else(|_| "1000000000".to_string())
                 .parse()
-                .unwrap_or(1_000_000_000), // 1 STC in nano units
+                .unwrap_or(100_000_000), // 1 STC in nano units
             block_subscription_interval: env::var("BLOCK_SUBSCRIPTION_INTERVAL")
                 .unwrap_or_else(|_| "1000".to_string())
                 .parse()

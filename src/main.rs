@@ -25,18 +25,6 @@ struct Args {
     log_level: Level,
 }
 
-struct FakeMonitorDispatcher {}
-
-impl MonitorDispatcher for FakeMonitorDispatcher {
-    fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
-        todo!()
-    }
-
-    fn dispatch_block(&self, block: BlockView) -> Result<()> {
-        todo!()
-    }
-}
-
 fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
@@ -52,11 +40,10 @@ fn main() -> Result<()> {
     let config = Arc::new(config::Config::load()?);
     info!("Configuration loaded successfully");
 
-    let tg_bot = TelegramBot::new(config.clone());
+    let tg_bot = Arc::new(TelegramBot::new(config.clone()));
 
     // do some compute-heavy work or call synchronous code
-    let monitor = monitor::Monitor::new(Arc::new(FakeMonitorDispatcher {}), config)
-        .expect("Failed to create monitor.");
+    let monitor = monitor::Monitor::new(tg_bot.clone(), config).expect("Failed to create monitor.");
 
     let mut handles = monitor.run()?;
     handles.push(tg_bot.run()?);

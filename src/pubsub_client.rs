@@ -3,7 +3,7 @@
 
 use anyhow::{ensure, Result};
 use futures::{TryStream, TryStreamExt};
-use starcoin_rpc_api::types::pubsub::EventFilter;
+use starcoin_rpc_api::types::{pubsub::EventFilter, BlockView, TransactionEventView};
 use starcoin_rpc_client::RpcClient;
 
 use tokio::io::AsyncBufReadExt;
@@ -57,13 +57,14 @@ impl PubSubClient {
         })
     }
 
-    pub fn subscribe_new_blocks(&self) -> Result<()> {
+    pub fn subscribe_new_blocks<F: Fn(&BlockView)>(&self, fun: F) -> Result<()> {
         info!("subscribe_new_blocks | Entered");
 
         let subscription = self.client.subscribe_new_blocks()?;
 
-        blocking_display_notification(subscription, |evt| {
-            serde_json::to_string(&evt).expect("should never fail")
+        blocking_display_notification(subscription, |bv| {
+            fun(bv);
+            serde_json::to_string(&bv).expect("should never fail")
         });
 
         info!("subscribe_new_blocks | Exited");
@@ -71,7 +72,7 @@ impl PubSubClient {
         Ok(())
     }
 
-    pub fn subscribe_new_events(&self) -> Result<()> {
+    pub fn subscribe_new_events<F: Fn(&TransactionEventView)>(&self, fun: F) -> Result<()> {
         info!("subscribe_new_events | Entered");
 
         let event_filter = EventFilter {
@@ -85,6 +86,7 @@ impl PubSubClient {
         let subscription = self.client.subscribe_events(event_filter, true)?;
 
         blocking_display_notification(subscription, |evt| {
+            fun(evt);
             serde_json::to_string(&evt).expect("should never fail")
         });
 

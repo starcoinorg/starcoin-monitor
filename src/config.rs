@@ -10,6 +10,7 @@ pub struct Config {
     pub starcoin_rpc_url: String,
     pub telegram_bot_token: String,
     pub telegram_chat_id: String,
+    pub telegram_proxy: Option<String>,
     pub database_url: String,
     pub min_transaction_amount: u64,
     pub block_subscription_interval: u64,
@@ -23,9 +24,12 @@ impl Config {
             starcoin_rpc_url: env::var("STARCOIN_RPC_URL")
                 .unwrap_or_else(|_| "ws://main.seed.starcoin.org:9870".to_string()),
             telegram_bot_token: env::var("TELEGRAM_BOT_TOKEN")
-                .unwrap_or_else(|_| "test_bot_token".to_string()),
-            telegram_chat_id: env::var("TELEGRAM_CHAT_ID")
-                .unwrap_or_else(|_| "test_chat_id".to_string()),
+                .expect("TELEGRAM_BOT_TOKEN is not set"),
+            telegram_chat_id: env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID is not set"),
+            telegram_proxy: env::var("TELOXIDE_PROXY").map(Some).or_else(|e| match e {
+                env::VarError::NotPresent => Ok(None),
+                _ => Err(e),
+            })?,
             database_url: env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite:starcoin_monitor.db".to_string()),
             min_transaction_amount: env::var("MIN_TRANSACTION_AMOUNT")
@@ -43,9 +47,10 @@ impl Config {
 
     pub fn localhost() -> Self {
         Self {
-            starcoin_rpc_url: "ws://localhost:9870".to_string(),
-            telegram_bot_token: "".to_string(),
-            telegram_chat_id: "".to_string(),
+            starcoin_rpc_url: "ws://127.0.0.1:9870".to_string(),
+            telegram_bot_token: "8027205533:AAFRvlei8X1kjN4tOsy-oA-MxVBiPHnrCD4".to_string(),
+            telegram_proxy: Some("http://127.0.0.1:7890".to_string()),
+            telegram_chat_id: "1924440643".to_string(),
             database_url: "sqlite:starcoin_monitor.db".to_string(),
             min_transaction_amount: 1_000_000_000,
             block_subscription_interval: 1000,

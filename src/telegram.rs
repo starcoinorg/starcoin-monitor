@@ -1,15 +1,15 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
-use starcoin_types::account_config::{genesis_address, WithdrawEvent};
-use starcoin_types::block::BlockNumber;
-use starcoin_types::identifier::Identifier;
-use starcoin_types::language_storage::{StructTag, TypeTag};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::thread::JoinHandle;
+use starcoin_types::{
+    account_config::{genesis_address, WithdrawEvent},
+    block::BlockNumber,
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+};
+use std::{str::FromStr, sync::Arc, thread::JoinHandle};
 use teloxide::{prelude::*, types::Message, Bot};
 use tracing::{error, info};
 

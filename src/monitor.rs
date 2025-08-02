@@ -1,11 +1,10 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::Config, monitor_dispatcher::MonitorDispatcher, pubsub_client::PubSubClient};
+use crate::{monitor_dispatcher::MonitorDispatcher, pubsub_client::PubSubClient};
 use anyhow::Result;
 use starcoin_rpc_client::RpcClient;
-use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::{sync::Arc, thread::JoinHandle};
 use tracing::info;
 
 pub struct Monitor {
@@ -14,12 +13,7 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new(
-        rpc_client: Arc<RpcClient>,
-        dispatcher: Arc<dyn MonitorDispatcher>,
-        config: Arc<Config>,
-    ) -> Result<Self> {
-        let rpc_url = config.starcoin_rpc_url.clone();
+    pub fn new(rpc_client: Arc<RpcClient>, dispatcher: Arc<dyn MonitorDispatcher>) -> Result<Self> {
         Ok(Self {
             dispatcher,
             pubsub_client: Arc::new(PubSubClient::new(rpc_client)?),

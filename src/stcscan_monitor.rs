@@ -169,7 +169,7 @@ impl StcScanMonitor {
                 match monitor_result {
                     IndexMonitorResult::ShouldWait => {
                         rt.block_on(async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50000)).await;
                         });
                         continue;
                     }
@@ -191,7 +191,7 @@ impl StcScanMonitor {
                     }
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(5000));
+                std::thread::sleep(std::time::Duration::from_millis(50000));
             }
         }))
     }

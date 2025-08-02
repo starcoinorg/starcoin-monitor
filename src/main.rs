@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod config;
-mod index_monitor_logic;
 mod monitor;
 mod monitor_dispatcher;
 mod pubsub_client;
@@ -50,7 +49,7 @@ fn main() -> Result<()> {
     let tg_bot = Arc::new(TelegramBot::new(config.clone()));
 
     // Init monitor, do some compute-heavy work or call synchronous code
-    let monitor = monitor::Monitor::new(rpc_client.clone(), tg_bot.clone(), config.clone())
+    let monitor = monitor::Monitor::new(rpc_client.clone(), tg_bot.clone())
         .expect("Failed to create monitor.");
     let mut handles = monitor.run()?;
     handles.push(tg_bot.run()?);

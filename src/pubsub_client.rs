@@ -5,12 +5,13 @@ use anyhow::{ensure, Result};
 use futures::{TryStream, TryStreamExt};
 use starcoin_rpc_api::types::{pubsub::EventFilter, BlockView, TransactionEventView};
 use starcoin_rpc_client::RpcClient;
+use std::sync::Arc;
 
 use tokio::io::AsyncBufReadExt;
 use tracing::info;
 
 pub struct PubSubClient {
-    client: RpcClient,
+    rpc_client: Arc<RpcClient>,
 }
 
 fn blocking_display_notification<T, F>(
@@ -52,17 +53,14 @@ fn blocking_display_notification<T, F>(
     });
 }
 impl PubSubClient {
-    pub fn new(rpc_url: &str) -> Result<Self> {
-        ensure!(rpc_url.starts_with("ws://") || rpc_url.starts_with("wss://"));
-        Ok(Self {
-            client: RpcClient::connect_websocket(rpc_url)?,
-        })
+    pub fn new(rpc_client: Arc<RpcClient>) -> Result<Self> {
+        Ok(Self { rpc_client })
     }
 
     pub fn subscribe_new_blocks<F: Fn(&BlockView)>(&self, fun: F) -> Result<()> {
         info!("subscribe_new_blocks | Entered");
 
-        let subscription = self.client.subscribe_new_blocks()?;
+        let subscription = self.rpc_client.subscribe_new_blocks()?;
 
         blocking_display_notification(subscription, |bv| {
             fun(bv);
@@ -85,7 +83,7 @@ impl PubSubClient {
             type_tags: None,
             limit: None,
         };
-        let subscription = self.client.subscribe_events(event_filter, true)?;
+        let subscription = self.rpc_client.subscribe_events(event_filter, true)?;
 
         blocking_display_notification(subscription, |evt| {
             fun(evt);

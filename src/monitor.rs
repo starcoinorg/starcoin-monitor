@@ -3,6 +3,7 @@
 
 use crate::{config::Config, monitor_dispatcher::MonitorDispatcher, pubsub_client::PubSubClient};
 use anyhow::Result;
+use starcoin_rpc_client::RpcClient;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tracing::info;
@@ -13,11 +14,15 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new(dispatcher: Arc<dyn MonitorDispatcher>, config: Arc<Config>) -> Result<Self> {
+    pub fn new(
+        rpc_client: Arc<RpcClient>,
+        dispatcher: Arc<dyn MonitorDispatcher>,
+        config: Arc<Config>,
+    ) -> Result<Self> {
         let rpc_url = config.starcoin_rpc_url.clone();
         Ok(Self {
             dispatcher,
-            pubsub_client: Arc::new(PubSubClient::new(rpc_url.as_str())?),
+            pubsub_client: Arc::new(PubSubClient::new(rpc_client)?),
         })
     }
 

@@ -7929,6 +7929,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "chrono",
  "clap 4.5.41",
  "dotenv",

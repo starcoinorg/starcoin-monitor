@@ -4,6 +4,7 @@
 use anyhow::{anyhow, Result};
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 use starcoin_types::account_config::{genesis_address, WithdrawEvent};
+use starcoin_types::block::BlockNumber;
 use starcoin_types::identifier::Identifier;
 use starcoin_types::language_storage::{StructTag, TypeTag};
 use std::str::FromStr;
@@ -505,5 +506,19 @@ impl MonitorDispatcher for TelegramBot {
         //self.send_message(format!("block: {:?}", block).as_str())
         //    .await
         Ok(())
+    }
+
+    async fn dispatch_stcscan_index_exception(
+        &self,
+        curr_number: BlockNumber,
+        cached_number: BlockNumber,
+    ) -> Result<()> {
+        let msg = format!(
+            "🚨 STCScan Index Exception: Current block number: {}, Cached index number: {}, Difference: {}",
+            curr_number,
+            cached_number,
+            curr_number - cached_number
+        );
+        self.send_message(msg.as_str()).await
     }
 }

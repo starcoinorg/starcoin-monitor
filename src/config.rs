@@ -13,6 +13,9 @@ pub struct Config {
     pub telegram_proxy: Option<String>,
     pub min_transaction_amount: u128,
     pub block_subscription_interval: u64,
+    pub es_url: String,
+    pub es_user_name: String,
+    pub es_password: String,
 }
 
 impl Config {
@@ -37,6 +40,9 @@ impl Config {
                 .unwrap_or_else(|_| "1000".to_string())
                 .parse()
                 .unwrap_or(1000),
+            es_url: env::var("ES_URL").unwrap_or_else(|_| "elastic".to_string()),
+            es_user_name: env::var("ES_USER_NAME").unwrap_or_else(|_| "elastic".to_string()),
+            es_password: env::var("ES_PASSWORD").unwrap_or_else(|_| "changeme".to_string()),
         };
 
         Ok(config)

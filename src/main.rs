@@ -5,12 +5,15 @@ mod config;
 mod monitor;
 mod monitor_dispatcher;
 mod pubsub_client;
+mod stc_scan_monitor;
 mod telegram;
 mod types;
 
 use crate::telegram::TelegramBot;
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use clap::Parser;
+use starcoin_rpc_client::RpcClient;
+use stc_scan_monitor::StcScanMonitor;
 use std::sync::Arc;
 use tracing::{info, Level};
 
@@ -37,13 +40,22 @@ fn main() -> Result<()> {
     let config = Arc::new(config::Config::load()?);
     info!("Configuration loaded successfully");
 
+    let rpc_url = &config.starcoin_rpc_url;
+    ensure!(rpc_url.starts_with("ws://") || rpc_url.starts_with("wss://"));
+    let rpc_client = Arc::new(RpcClient::connect_websocket(rpc_url)?);
+
+    // Init telegram bot
     let tg_bot = Arc::new(TelegramBot::new(config.clone()));
 
-    // do some compute-heavy work or call synchronous code
-    let monitor = monitor::Monitor::new(tg_bot.clone(), config).expect("Failed to create monitor.");
-
+    // Init monitor, do some compute-heavy work or call synchronous code
+    let monitor = monitor::Monitor::new(rpc_client.clone(), tg_bot.clone(), config.clone())
+        .expect("Failed to create monitor.");
     let mut handles = monitor.run()?;
     handles.push(tg_bot.run()?);
+
+    // Init stc scan monitor
+    let stc_scan_monitor = StcScanMonitor::new(config.clone(), tg_bot.clone(), rpc_client.clone());
+    handles.push(stc_scan_monitor.run()?);
 
     // Join handles
     for handle in handles {

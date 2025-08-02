@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod config;
-mod database;
 mod monitor;
 mod monitor_dispatcher;
 mod pubsub_client;

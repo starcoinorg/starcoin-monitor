@@ -1,5 +1,4 @@
 pub mod config;
-pub mod database;
 pub mod monitor;
 pub mod monitor_dispatcher;
 pub mod pubsub_client;

@@ -11,11 +11,14 @@ use starcoin_rpc_client::RpcClient;
 use starcoin_types::block::BlockNumber;
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use tracing::log::debug;
 use tracing::{error, info};
 
 const MAX_NOTIFY_TIME_INTERVAL: u64 = 600;
 
 const MAC_BLOCK_DIFFER: u64 = 1000;
+
+const SLEEP_INTERVAL_MILLI_SECONDS: u64 = 50000;
 
 pub struct StcScanMonitor {
     config: Arc<Config>,
@@ -149,6 +152,18 @@ impl StcScanMonitor {
                     .unwrap_or(0)
                 });
 
+                debug!(
+                    "StcScanMonitor::run | current_block_number: {}, cached_index_number: {}",
+                    current_block_number, cached_index_number
+                );
+
+                if current_block_number < cached_index_number {
+                    rt.block_on(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
+                    });
+                    continue;
+                }
+
                 let utc_timestamp_secs = Utc::now().timestamp() as u64;
 
                 if (current_block_number - cached_index_number) > MAC_BLOCK_DIFFER
@@ -167,7 +182,7 @@ impl StcScanMonitor {
                     latest_notify_time = utc_timestamp_secs;
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                std::thread::sleep(std::time::Duration::from_millis(5000));
             }
         }))
     }

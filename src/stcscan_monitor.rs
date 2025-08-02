@@ -3,8 +3,11 @@
 
 use crate::{
     config::Config,
-    index_monitor_logic::{IndexMonitorConfig, IndexMonitorResult, NotificationState, check_index_monitor_state, update_notification_state},
     monitor_dispatcher::MonitorDispatcher,
+    stcscan_monitor_index::{
+        check_index_monitor_state, update_notification_state, IndexMonitorConfig,
+        IndexMonitorResult, NotificationState,
+    },
 };
 use anyhow::Result;
 use base64::Engine;
@@ -13,12 +16,8 @@ use reqwest::Client;
 use serde_json::Value;
 use starcoin_rpc_client::RpcClient;
 use starcoin_types::block::BlockNumber;
-use std::sync::Arc;
-use std::thread::JoinHandle;
-use tracing::log::debug;
-use tracing::{error, info};
-
-
+use std::{sync::Arc, thread::JoinHandle};
+use tracing::{debug, error, info};
 
 pub struct StcScanMonitor {
     config: Arc<Config>,
@@ -134,7 +133,7 @@ impl StcScanMonitor {
 
             let mut notification_state = NotificationState::default();
             let monitor_config = IndexMonitorConfig::default();
-            
+
             loop {
                 // Get current block number
                 let current_block_number = rpc_client
@@ -174,14 +173,15 @@ impl StcScanMonitor {
                         });
                         continue;
                     }
-                    IndexMonitorResult::ShouldNotify { current_block, cached_block, .. } => {
+                    IndexMonitorResult::ShouldNotify {
+                        current_block,
+                        cached_block,
+                        ..
+                    } => {
                         let dispatcher_clone = dispatcher.clone();
                         rt.block_on(async move {
                             let _ = dispatcher_clone
-                                .dispatch_stcscan_index_exception(
-                                    current_block,
-                                    cached_block,
-                                )
+                                .dispatch_stcscan_index_exception(current_block, cached_block)
                                 .await;
                         });
                         update_notification_state(&mut notification_state);
@@ -199,14 +199,13 @@ impl StcScanMonitor {
 
 #[cfg(test)]
 mod test {
-    use crate::stc_scan_monitor::get_cached_index_block_numer;
+    use crate::stcscan_monitor::get_cached_index_block_numer;
     use anyhow::Result;
 
     #[tokio::test]
     async fn test_get_cached_index_block_numer() -> Result<()> {
         let block_number =
-            get_cached_index_block_numer("http://127.0.0.1:9200", "elastic", "changeme")
-                .await?;
+            get_cached_index_block_numer("http://127.0.0.1:9200", "elastic", "changeme").await?;
         println!("Block number: {}", block_number);
         // Note: This test may return 0 if Elasticsearch is not running
         // In a real environment, this should return a valid block number
@@ -216,7 +215,7 @@ mod test {
 
     #[test]
     fn test_index_monitor_logic_integration() {
-        use crate::index_monitor_logic::{
+        use crate::stcscan_monitor_index::{
             check_index_monitor_state, IndexMonitorConfig, NotificationState,
         };
         use starcoin_types::block::BlockNumber;
@@ -226,26 +225,38 @@ mod test {
 
         // Test scenario 1: Current block behind cached block
         let result = check_index_monitor_state(100, 200, &state, &config);
-        assert!(matches!(result, crate::index_monitor_logic::IndexMonitorResult::ShouldWait));
+        assert!(matches!(
+            result,
+            crate::stcscan_monitor_index::IndexMonitorResult::ShouldWait
+        ));
 
         // Test scenario 2: Large difference, should notify
         let result = check_index_monitor_state(1200, 100, &state, &config);
-        assert!(matches!(result, crate::index_monitor_logic::IndexMonitorResult::ShouldNotify { .. }));
+        assert!(matches!(
+            result,
+            crate::stcscan_monitor_index::IndexMonitorResult::ShouldNotify { .. }
+        ));
 
         // Test scenario 3: Small difference, no action
         let result = check_index_monitor_state(1050, 100, &state, &config);
-        assert!(matches!(result, crate::index_monitor_logic::IndexMonitorResult::NoAction));
+        assert!(matches!(
+            result,
+            crate::stcscan_monitor_index::IndexMonitorResult::NoAction
+        ));
 
         // Test scenario 4: After notification, should not notify again immediately
-        if let crate::index_monitor_logic::IndexMonitorResult::ShouldNotify { .. } = result {
+        if let crate::stcscan_monitor_index::IndexMonitorResult::ShouldNotify { .. } = result {
             // This should not happen in this test case
         }
-        
+
         // Update state to simulate recent notification
         state.latest_notify_time = chrono::Utc::now().timestamp() as u64 - 100;
-        
+
         // Test scenario 5: Large difference but recent notification
         let result = check_index_monitor_state(1200, 100, &state, &config);
-        assert!(matches!(result, crate::index_monitor_logic::IndexMonitorResult::NoAction));
+        assert!(matches!(
+            result,
+            crate::stcscan_monitor_index::IndexMonitorResult::NoAction
+        ));
     }
 }

@@ -6,7 +6,8 @@ mod index_monitor_logic;
 mod monitor;
 mod monitor_dispatcher;
 mod pubsub_client;
-mod stc_scan_monitor;
+mod stcscan_monitor;
+mod stcscan_monitor_index;
 mod telegram;
 mod types;
 
@@ -14,7 +15,7 @@ use crate::telegram::TelegramBot;
 use anyhow::{ensure, Result};
 use clap::Parser;
 use starcoin_rpc_client::RpcClient;
-use stc_scan_monitor::StcScanMonitor;
+use stcscan_monitor::StcScanMonitor;
 use std::sync::Arc;
 use tracing::{info, Level};
 

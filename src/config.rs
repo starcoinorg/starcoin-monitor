@@ -12,7 +12,6 @@ pub struct Config {
     pub telegram_chat_id: String,
     pub telegram_proxy: Option<String>,
     pub min_transaction_amount: u128,
-    pub block_subscription_interval: u64,
     pub es_url: String,
     pub es_user_name: String,
     pub es_password: String,
@@ -36,10 +35,6 @@ impl Config {
                 .unwrap_or_else(|_| "1000000000".to_string())
                 .parse()
                 .unwrap_or(100_000_000), // 1 STC in nano units
-            block_subscription_interval: env::var("BLOCK_SUBSCRIPTION_INTERVAL")
-                .unwrap_or_else(|_| "1000".to_string())
-                .parse()
-                .unwrap_or(1000),
             es_url: env::var("ES_URL").unwrap_or_else(|_| "http://127.0.0.1:9200".to_string()),
             es_user_name: env::var("ES_USER_NAME").unwrap_or_else(|_| "elastic".to_string()),
             es_password: env::var("ES_PASSWORD").unwrap_or_else(|_| "changeme".to_string()),
@@ -57,7 +52,7 @@ mod tests {
     fn test_config_default_es_url() {
         // Clear any existing ES_URL environment variable
         std::env::remove_var("ES_URL");
-        
+
         let config = Config::load().expect("Failed to load config");
         assert_eq!(config.es_url, "http://127.0.0.1:9200");
         assert_eq!(config.es_user_name, "elastic");
@@ -69,12 +64,12 @@ mod tests {
         std::env::set_var("ES_URL", "http://localhost:9200");
         std::env::set_var("ES_USER_NAME", "admin");
         std::env::set_var("ES_PASSWORD", "secret");
-        
+
         let config = Config::load().expect("Failed to load config");
         assert_eq!(config.es_url, "http://localhost:9200");
         assert_eq!(config.es_user_name, "admin");
         assert_eq!(config.es_password, "secret");
-        
+
         // Clean up
         std::env::remove_var("ES_URL");
         std::env::remove_var("ES_USER_NAME");

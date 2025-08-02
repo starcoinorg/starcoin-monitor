@@ -496,8 +496,8 @@ impl MonitorDispatcher for TelegramBot {
 
         let withdraw_amount = withdraw_amount.unwrap();
         let msg = format!(
-            "⚠️ Warning: There has an over-limit transaction event being executed here. block number: {:?}, txn_hash: {}, event type: {:?}, withdraw_amount: {}",
-            event.block_number.unwrap().0, event.block_hash.unwrap().to_hex_literal(), type_tag.to_canonical_string(), withdraw_amount / 1e9 as u128
+            "⚠️ Warning: There has an over-limit transaction event being executed here. block number: {:?}, txn_hash: {}, event type: {:?}, withdraw_amount: {:.9}",
+            event.block_number.unwrap().0, event.block_hash.unwrap().to_hex_literal(), type_tag.to_canonical_string(), withdraw_amount as f64 / 1e9
         );
         self.send_message(msg.as_str()).await
     }

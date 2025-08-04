@@ -16,7 +16,6 @@ use tracing::{error, info};
 use crate::{
     config::Config,
     monitor_dispatcher::MonitorDispatcher,
-    types::{AccountBalance, Transaction, TransactionSummary},
 };
 
 #[derive(Clone)]
@@ -307,76 +306,76 @@ Need help? Contact the administrator.
         .to_string()
     }
 
-    fn format_transactions_list(
-        &self,
-        transactions: &[Transaction],
-        start_block: u64,
-        end_block: u64,
-    ) -> String {
-        let mut message = format!(
-            "📋 **Large Transactions (Blocks {} to {})**\n\n",
-            start_block, end_block
-        );
+    // fn format_transactions_list(
+    //     &self,
+    //     transactions: &[Transaction],
+    //     start_block: u64,
+    //     end_block: u64,
+    // ) -> String {
+    //     let mut message = format!(
+    //         "📋 **Large Transactions (Blocks {} to {})**\n\n",
+    //         start_block, end_block
+    //     );
 
-        for (i, tx) in transactions.iter().enumerate().take(10) {
-            // Limit to 10 transactions
-            let amount_stc = tx.amount as f64 / 1_000_000_000.0;
-            message.push_str(&format!(
-                "{}. **{:.2} STC**\n   From: `{}`\n   To: `{}`\n   Block: {}\n   Hash: `{}`\n\n",
-                i + 1,
-                amount_stc,
-                tx.from_address,
-                tx.to_address,
-                tx.block_number,
-                tx.hash
-            ));
-        }
+    //     for (i, tx) in transactions.iter().enumerate().take(10) {
+    //         // Limit to 10 transactions
+    //         let amount_stc = tx.amount as f64 / 1_000_000_000.0;
+    //         message.push_str(&format!(
+    //             "{}. **{:.2} STC**\n   From: `{}`\n   To: `{}`\n   Block: {}\n   Hash: `{}`\n\n",
+    //             i + 1,
+    //             amount_stc,
+    //             tx.from_address,
+    //             tx.to_address,
+    //             tx.block_number,
+    //             tx.hash
+    //         ));
+    //     }
 
-        if transactions.len() > 10 {
-            message.push_str(&format!(
-                "... and {} more transactions",
-                transactions.len() - 10
-            ));
-        }
+    //     if transactions.len() > 10 {
+    //         message.push_str(&format!(
+    //             "... and {} more transactions",
+    //             transactions.len() - 10
+    //         ));
+    //     }
 
-        message
-    }
+    //     message
+    // }
 
-    fn format_transaction_summary(&self, summary: &TransactionSummary) -> String {
-        let total_amount_stc = summary.total_amount as f64 / 1_000_000_000.0;
+    // fn format_transaction_summary(&self, summary: &TransactionSummary) -> String {
+    //     let total_amount_stc = summary.total_amount as f64 / 1_000_000_000.0;
 
-        format!(
-            "📊 **Transaction Summary**\n\n\
-            **Period:** {}\n\
-            **Total Transactions:** {}\n\
-            **Total Amount:** {:.2} STC\n\
-            **Average per Transaction:** {:.2} STC",
-            summary.period,
-            summary.total_transactions,
-            total_amount_stc,
-            if summary.total_transactions > 0 {
-                total_amount_stc / summary.total_transactions as f64
-            } else {
-                0.0
-            }
-        )
-    }
+    //     format!(
+    //         "📊 **Transaction Summary**\n\n\
+    //         **Period:** {}\n\
+    //         **Total Transactions:** {}\n\
+    //         **Total Amount:** {:.2} STC\n\
+    //         **Average per Transaction:** {:.2} STC",
+    //         summary.period,
+    //         summary.total_transactions,
+    //         total_amount_stc,
+    //         if summary.total_transactions > 0 {
+    //             total_amount_stc / summary.total_transactions as f64
+    //         } else {
+    //             0.0
+    //         }
+    //     )
+    // }
 
-    fn format_account_balance(&self, balance: &AccountBalance) -> String {
-        let balance_stc = balance.balance as f64 / 1_000_000_000.0;
+    // fn format_account_balance(&self, balance: &AccountBalance) -> String {
+    //     let balance_stc = balance.balance as f64 / 1_000_000_000.0;
 
-        format!(
-            "💰 **Account Balance**\n\n\
-            **Address:** `{}`\n\
-            **Token:** {}\n\
-            **Balance:** {:.2} STC\n\
-            **Last Updated:** {}",
-            balance.address,
-            balance.token,
-            balance_stc,
-            balance.last_updated.format("%Y-%m-%d %H:%M:%S UTC")
-        )
-    }
+    //     format!(
+    //         "💰 **Account Balance**\n\n\
+    //         **Address:** `{}`\n\
+    //         **Token:** {}\n\
+    //         **Balance:** {:.2} STC\n\
+    //         **Last Updated:** {}",
+    //         balance.address,
+    //         balance.token,
+    //         balance_stc,
+    //         balance.last_updated.format("%Y-%m-%d %H:%M:%S UTC")
+    //     )
+    // }
 
     pub async fn send_message(&self, message: &str) -> Result<()> {
         self.send_message_to_chat(ChatId(self.config.telegram_chat_id.parse()?), message)

@@ -20,7 +20,7 @@ jobs:
         id: docker_meta
         uses: crazy-max/ghaction-docker-meta@v1
         with:
-          images: starcoin/starcoin-monitor,ghcr.io/starcoinorg/starcoin-monitor
+          images: ghcr.io/starcoinorg/starcoin-monitor
           tag-sha: true # add git short SHA as Docker tag
       #      -
       #        name: Set up QEMU
@@ -29,11 +29,6 @@ jobs:
         uses: docker/setup-buildx-action@v2
         with:
           driver: docker
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
         with:

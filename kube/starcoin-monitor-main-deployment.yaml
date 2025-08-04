@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starcoin-monitor
+  namespace: starcoin-main
+  labels:
+    app: starcoin-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: starcoin-monitor
+  template:
+    metadata:
+      labels:
+        app: starcoin-monitor
+    spec:
+      containers:
+        - name: starcoin-monitor
+          image: starcoin-monitor:latest
+          imagePullPolicy: Always
+          env:
+            - name: STARCOIN_RPC_URL
+              value: "ws://main.seed.starcoin.org:9870"
+            - name: MIN_TRANSACTION_AMOUNT
+              value: "1000000"
+            - name: ES_URL
+              value: "elasticsearch.default.svc.cluster.local"
+            - name: ES_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch
+                  key: username
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch
+                  key: password
+            # Secret environment variables
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: starcoin-monitor-secret
+                  key: TELEGRAM_BOT_TOKEN
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: starcoin-monitor-secret
+                  key: TELEGRAM_CHAT_ID
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - starcoin-monitor
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pgrep
+                - starcoin-monitor
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: temp-volume
+              mountPath: /app/data
+      volumes:
+        - name: temp-volume
+          emptyDir: {}
+      restartPolicy: Always 

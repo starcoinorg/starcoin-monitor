@@ -1,29 +1,31 @@
-FROM rust:1.75 as builder
+# Multi-stage build for starcoin-monitor
+FROM rust:1.87-slim as builder
+
+# Install build dependencies with retry mechanism
+RUN apt-get update && \
+    apt-get install -y --fix-missing \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy manifests
-COPY Cargo.toml Cargo.lock ./
+# Copy manifests first for better caching
+COPY . .
 
-# Create a dummy main.rs to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# Build dependencies
 RUN cargo build --release
 
-# Remove dummy main.rs and copy real source
-RUN rm src/main.rs
-COPY src ./src
-
-# Build the application
-RUN cargo build --release
+# Clean cargo cache
+RUN rm -rf /usr/local/cargo/registry
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM alpine:latest
 
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies
+RUN apk add --no-cache \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    openssl
 
 WORKDIR /app
 
@@ -31,14 +33,22 @@ WORKDIR /app
 COPY --from=builder /app/target/release/starcoin-monitor /usr/local/bin/
 
 # Create a non-root user
-RUN useradd -r -s /bin/false app
+RUN adduser -D -s /bin/false app && \
+    mkdir -p /app/data && \
+    chown -R app:app /app
+
 USER app
 
 # Set environment variables
-ENV RUST_LOG=info
+ENV RUST_LOG=info \
+    RUST_BACKTRACE=1
 
-# Expose port (if needed for future web interface)
-EXPOSE 8080
+# Create health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD pgrep starcoin-monitor || exit 1
+
+# Clean build cache
+RUN rm -rf /app/target/release /usr/local/cargo/registry
 
 # Run the binary
 CMD ["starcoin-monitor"] 

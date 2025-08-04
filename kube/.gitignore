@@ -1,0 +1,6 @@
+# Kubernetes Secret file
+starcoin-monitor-secret.yaml
+
+*-secret.yaml
+*-secrets.yaml
+secrets/ 

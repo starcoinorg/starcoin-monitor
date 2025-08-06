@@ -47,7 +47,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: starcoin-monitor-secret
-  namespace: starcoin-main
+  namespace: default
   labels:
     app: starcoin-monitor
 type: Opaque

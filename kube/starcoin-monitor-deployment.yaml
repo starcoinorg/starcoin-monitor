@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: starcoin-monitor
-  namespace: starcoin-main
+  namespace: default
   labels:
     app: starcoin-monitor
 spec:
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: starcoin-monitor
-          image: starcoin-monitor:latest
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-2089ff4
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL

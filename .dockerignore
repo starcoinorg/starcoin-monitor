@@ -12,7 +12,7 @@ INDEX_MONITOR_LOGIC_SUMMARY.md
 env.example
 
 # Docker files
-Dockerfile
+docker/Dockerfile
 .dockerignore
 docker-compose.yml
 

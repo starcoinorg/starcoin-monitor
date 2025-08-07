@@ -513,7 +513,7 @@ impl MonitorDispatcher for TelegramBot {
         cached_number: BlockNumber,
     ) -> Result<()> {
         let msg = format!(
-            "🚨 STCScan Index Exception: Current block number: {}, Cached index number: {}, Difference: {}",
+            "🚨 STCScan Index Exception: Current OnChain block number: {}, ES Cached index number: {}, Difference: {}",
             curr_number,
             cached_number,
             curr_number - cached_number

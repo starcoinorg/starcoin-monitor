@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     let rpc_client = Arc::new(RpcClient::connect_websocket(rpc_url)?);
 
     // Init telegram bot
-    let tg_bot = Arc::new(TelegramBot::new(config.clone()));
+    let tg_bot = Arc::new(TelegramBot::new(config.clone(), rpc_client.clone()));
 
     // Init monitor, do some compute-heavy work or call synchronous code
     let monitor = monitor::Monitor::new(rpc_client.clone(), tg_bot.clone())

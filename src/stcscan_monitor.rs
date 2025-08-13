@@ -217,7 +217,6 @@ mod test {
         use crate::stcscan_monitor_index::{
             check_index_monitor_state, IndexMonitorConfig, NotificationState,
         };
-        use starcoin_types::block::BlockNumber;
 
         let config = IndexMonitorConfig::default();
         let mut state = NotificationState::default();

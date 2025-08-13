@@ -17,13 +17,13 @@ spec:
     spec:
       containers:
         - name: starcoin-monitor
-          image: ghcr.io/starcoinorg/starcoin-monitor:sha-2089ff4
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-11ec43c
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL
               value: "ws://main.seed.starcoin.org:9870"
             - name: MIN_TRANSACTION_AMOUNT
-              value: "1000000"
+              value: "100000000000"
             - name: ES_URL
               value: "elasticsearch.default.svc.cluster.local"
             - name: ES_USER_NAME

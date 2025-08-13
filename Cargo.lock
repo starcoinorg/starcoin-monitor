@@ -7563,6 +7563,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "starcoin-crypto",
  "starcoin-rpc-api",
  "starcoin-rpc-client",
  "starcoin-types",

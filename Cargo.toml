@@ -26,5 +26,4 @@ tracing-subscriber = "0.3"
 starcoin-rpc-client = { git = "https://github.com/starcoinorg/starcoin", rev = "ba7cd08110d3582361e0862f45109361036b50ce" }
 starcoin-types = { git = "https://github.com/starcoinorg/starcoin", rev = "ba7cd08110d3582361e0862f45109361036b50ce" }
 starcoin-rpc-api = { git = "https://github.com/starcoinorg/starcoin", rev = "ba7cd08110d3582361e0862f45109361036b50ce" }
-
-
+starcoin-crypto = { git = "https://github.com/starcoinorg/starcoin-crypto", rev = "a742ddc0674022800341182cbb4c3681807b2f00" }

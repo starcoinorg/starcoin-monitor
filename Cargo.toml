@@ -14,10 +14,9 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"] }
 dotenv = "0.15"
 futures = "0.3"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
 teloxide = { version = "0.12", features = ["macros"] }
 tokio = { version = "1.47.0", features = ["full"] }
 tracing = "0.1"

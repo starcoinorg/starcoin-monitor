@@ -146,8 +146,13 @@ async fn do_handle_blocks(
         .sum::<u128>();
 
     Ok(Some(format!(
-        "Transaction Total Amount: {}, txn list: {:?}",
-        total_amount, matched_txn
+        "Block between: https://stcscan.io/main/blocks/height/{}, https://stcscan.io/main/blocks/height/{}
+         \nTransaction Total Amount  {:.9} STC,
+         \nTransaction List: {:?}",
+        start_num,
+        end_num,
+        (total_amount as f64) / (1e9f64),
+        matched_txn
     )))
 }
 

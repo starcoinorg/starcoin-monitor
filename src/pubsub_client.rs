@@ -14,11 +14,11 @@ pub struct PubSubClient {
     rpc_client: Arc<RpcClient>,
 }
 
-fn blocking_display_notification<T, F>(
+fn blocking_handle_notification<T, F>(
     mut event_stream: impl TryStream<Ok = T, Error = anyhow::Error> + Unpin,
-    display: F,
+    handle: F,
 ) where
-    F: Fn(&T) -> String,
+    F: Fn(&T),
 {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_io()
@@ -41,7 +41,8 @@ fn blocking_display_notification<T, F>(
                    match try_event {
                         Ok(None) => break,
                         Ok(Some(evt)) => {
-                            println!("{}", display(&evt));
+                            handle(&evt);
+                            // println!("{}", display(&evt))
                         }
                         Err(e) => {
                             eprintln!("subscription return err: {}", &e);
@@ -62,9 +63,8 @@ impl PubSubClient {
 
         let subscription = self.rpc_client.subscribe_new_blocks()?;
 
-        blocking_display_notification(subscription, |bv| {
+        blocking_handle_notification(subscription, |bv| {
             fun(bv);
-            serde_json::to_string(&bv).expect("should never fail")
         });
 
         info!("subscribe_new_blocks | Exited");
@@ -85,9 +85,8 @@ impl PubSubClient {
         };
         let subscription = self.rpc_client.subscribe_events(event_filter, true)?;
 
-        blocking_display_notification(subscription, |evt| {
+        blocking_handle_notification(subscription, |evt| {
             fun(evt);
-            serde_json::to_string(&evt).expect("should never fail")
         });
 
         info!("subscribe_new_events | Exited");

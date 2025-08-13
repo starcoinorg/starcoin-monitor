@@ -3,6 +3,7 @@
 
 use crate::{config::Config, monitor_dispatcher::MonitorDispatcher};
 use anyhow::{anyhow, Result};
+use starcoin_rpc_api::chain::GetTransactionOption;
 use starcoin_rpc_api::types::{
     BlockTransactionsView, BlockView, ModuleIdView, SignedUserTransactionView,
     TransactionEventView, TransactionPayloadView,
@@ -39,6 +40,14 @@ fn parse_txn_p2p_amount(txn_view: SignedUserTransactionView) -> Result<Option<u1
                 && function_view.function == Identifier::new("peer_to_peer_v2")?
             {
                 function_view.args[1].0.as_u64().map(|n| n as u128)
+            } else if function_view.module
+                == ModuleIdView::from(ModuleId::new(
+                    AccountAddress::ONE,
+                    Identifier::new("TransferScripts")?,
+                ))
+                && function_view.function == Identifier::new("peer_to_peer")?
+            {
+                function_view.args[2].0.as_u64().map(|n| n as u128)
             } else {
                 None
             }
@@ -47,6 +56,99 @@ fn parse_txn_p2p_amount(txn_view: SignedUserTransactionView) -> Result<Option<u1
     };
 
     Ok(amount)
+}
+
+async fn do_handle_blocks(
+    rpc_client: Arc<RpcClient>,
+    config: Arc<Config>,
+    start_num: BlockNumber,
+    end_num: BlockNumber,
+) -> Result<Option<String>> {
+    let rpc_client1 = rpc_client.clone();
+    let blocking_views = tokio::task::spawn_blocking(move || {
+        rpc_client1.chain_get_blocks_by_number(Some(start_num), end_num - start_num, None)
+    })
+    .await??;
+
+    if blocking_views.is_empty() {
+        return Ok(Some(format!(
+            " No matched transactions found in blocks {} to {}",
+            start_num, end_num
+        )));
+    }
+
+    // Collect all transactions that need to be processed
+    let mut all_transactions = Vec::new();
+
+    // First, collect all transaction hashes that need to be fetched
+    let mut txn_hashes_to_fetch = Vec::new();
+    let mut full_transactions = Vec::new();
+
+    for block in &blocking_views {
+        match &block.body {
+            BlockTransactionsView::Hashes(txn_hashes) => {
+                txn_hashes_to_fetch.extend(txn_hashes.iter().cloned());
+            }
+            BlockTransactionsView::Full(txs) => {
+                full_transactions.extend(txs.iter().cloned());
+            }
+        }
+    }
+
+    // Now fetch detailed transaction info for hash types
+    for txn_hash in txn_hashes_to_fetch {
+        let rpc_client_clone = rpc_client.clone();
+        let txn_result = tokio::task::spawn_blocking(move || {
+            rpc_client_clone
+                .chain_get_transaction(txn_hash, Some(GetTransactionOption { decode: true }))
+                .ok()
+                .flatten()
+        })
+        .await?;
+
+        if let Some(txn) = txn_result {
+            if let Some(user_txn) = txn.user_transaction {
+                all_transactions.push(user_txn);
+            }
+        }
+    }
+
+    // Add the full transactions
+    all_transactions.extend(full_transactions);
+
+    if all_transactions.is_empty() {
+        return Ok(Some(format!(
+            " No matched transactions found in blocks {} to {}",
+            start_num, end_num
+        )));
+    }
+
+    // Process all collected transactions
+    let mut matched_txn = Vec::new();
+
+    for tx in all_transactions {
+        let amount = parse_txn_p2p_amount(tx.clone())?;
+        if config.min_transaction_amount < amount.unwrap_or(0) {
+            matched_txn.push((tx.transaction_hash.clone(), amount));
+        }
+    }
+
+    if matched_txn.is_empty() {
+        return Ok(Some(format!(
+            " No matched transactions found in blocks {} to {}",
+            start_num, end_num
+        )));
+    }
+
+    let total_amount = matched_txn
+        .iter()
+        .map(|pair| pair.1.unwrap_or(0))
+        .sum::<u128>();
+
+    Ok(Some(format!(
+        "Transaction Total Amount: {}, txn list: {:?}",
+        total_amount, matched_txn
+    )))
 }
 
 #[derive(Clone)]
@@ -215,72 +317,16 @@ impl TelegramBot {
             return Ok(());
         }
 
-        match self.rpc_client.chain_get_blocks_by_number(
-            Some(start_block),
-            start_block - end_block,
-            None,
-        ) {
-            Ok(blocks) => {
-                if blocks.is_empty() {
-                    self.send_message_to_chat(
-                        chat_id,
-                        &format!(
-                            " No matched transactions found in blocks {} to {}",
-                            start_block, end_block
-                        ),
-                    )
-                    .await?;
-                    return Ok(());
-                }
-
-                let mut matched_txn = Vec::new();
-                for block in blocks {
-                    match block.body {
-                        BlockTransactionsView::Full(txs) => {
-                            for tx in txs {
-                                let amount = parse_txn_p2p_amount(tx.clone())?;
-                                if self.config.min_transaction_amount < amount.unwrap_or(0) {
-                                    matched_txn.push((tx.transaction_hash.clone(), amount));
-                                }
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
-
-                if matched_txn.is_empty() {
-                    self.send_message_to_chat(
-                        chat_id,
-                        &format!(
-                            " No matched transactions found in blocks {} to {}",
-                            start_block, end_block
-                        ),
-                    )
-                    .await?;
-                    return Ok(());
-                }
-
-                let total_amount = matched_txn
-                    .iter()
-                    .map(|pair| pair.1.unwrap_or(0))
-                    .sum::<u128>();
-                self.send_message_to_chat(
-                    chat_id,
-                    format!(
-                        "Transaction Total Amount: {}, txn list: {:?}",
-                        total_amount, matched_txn
-                    )
-                    .as_str(),
-                )
-                .await?;
-            }
-            Err(e) => {
-                error!("Error fetching transactions: {}", e);
-                let message = "❌ Error fetching transactions from database";
-                self.send_message_to_chat(chat_id, message).await?;
-            }
+        let respon_message = do_handle_blocks(
+            self.rpc_client.clone(),
+            self.config.clone(),
+            start_block,
+            end_block,
+        )
+        .await?;
+        if let Some(msg) = respon_message {
+            self.send_message_to_chat(chat_id, &msg).await?;
         }
-
         Ok(())
     }
 

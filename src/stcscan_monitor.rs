@@ -77,6 +77,7 @@ async fn get_cached_index_block_numer(
     }
 
     let response_text = response.text().await?;
+    info!("Fetching response text: {}", response_text);
     let json: Value = serde_json::from_str(&response_text)?;
 
     // Navigate to the block_number field in the response
@@ -202,14 +203,12 @@ mod test {
     use crate::stcscan_monitor::get_cached_index_block_numer;
     use anyhow::Result;
 
+    #[ignore]
     #[tokio::test]
     async fn test_get_cached_index_block_numer() -> Result<()> {
         let block_number =
-            get_cached_index_block_numer("http://127.0.0.1:9200", "elastic", "changeme").await?;
-        println!("Block number: {}", block_number);
-        // Note: This test may return 0 if Elasticsearch is not running
-        // In a real environment, this should return a valid block number
-        assert!(block_number >= 0, "block number should be non-negative");
+            get_cached_index_block_numer(&"http://127.0.0.1:9200", &"elastic", &"pass").await?;
+        assert_ne!(block_number, 0);
         Ok(())
     }
 

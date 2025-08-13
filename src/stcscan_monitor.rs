@@ -9,7 +9,7 @@ use crate::{
         IndexMonitorResult, NotificationState,
     },
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use base64::Engine;
 
 use reqwest::Client;
@@ -69,11 +69,16 @@ async fn get_cached_index_block_numer(
         .await?;
 
     if !response.status().is_success() {
-        error!(
-            "Elasticsearch request failed with status: {}",
-            response.status()
+        let status = response.status();
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read error body".to_string());
+        anyhow::bail!(
+            "Elasticsearch request failed with status: {} - Error body: {}",
+            status,
+            error_body
         );
-        return Ok(0u64); // Return 0 as fallback
     }
 
     let response_text = response.text().await?;
@@ -144,15 +149,21 @@ impl StcScanMonitor {
                     .number
                     .0;
 
-                let cached_index_number: BlockNumber = rt.block_on(async {
+                let cached_index_number: BlockNumber = match rt.block_on(async {
                     get_cached_index_block_numer(
                         &config.es_url,
                         &config.es_user_name,
                         &config.es_password,
                     )
                     .await
-                    .unwrap_or(0)
-                });
+                }) {
+                    Ok(block_number) => block_number,
+                    Err(e) => {
+                        error!("Failed to get cached index block number from ES: {}", e);
+                        std::thread::sleep(std::time::Duration::from_millis(50000));
+                        continue;
+                    }
+                };
 
                 debug!(
                     "StcScanMonitor::run | current_block_number: {}, cached_index_number: {}",

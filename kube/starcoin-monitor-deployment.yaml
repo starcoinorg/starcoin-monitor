@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: starcoin-monitor
-          image: ghcr.io/starcoinorg/starcoin-monitor:sha-11ec43c
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-507a47b
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL
@@ -25,7 +25,7 @@ spec:
             - name: MIN_TRANSACTION_AMOUNT
               value: "500000000000000"
             - name: ES_URL
-              value: "elasticsearch.default.svc.cluster.local"
+              value: "http://elasticsearch.default.svc.cluster.local:9200"
             - name: ES_USER_NAME
               valueFrom:
                 secretKeyRef:
@@ -54,20 +54,20 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          livenessProbe:
-            exec:
-              command:
-                - pgrep
-                - starcoin-monitor
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          readinessProbe:
-            exec:
-              command:
-                - pgrep
-                - starcoin-monitor
-            initialDelaySeconds: 5
-            periodSeconds: 5
+#          livenessProbe:
+#            exec:
+#              command:
+#                - pgrep
+#                - starcoin-monitor
+#            initialDelaySeconds: 30
+#            periodSeconds: 10
+#          readinessProbe:
+#            exec:
+#              command:
+#                - pgrep
+#                - starcoin-monitor
+#            initialDelaySeconds: 5
+#            periodSeconds: 5
           volumeMounts:
             - name: temp-volume
               mountPath: /app/data

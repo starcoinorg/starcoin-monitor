@@ -9,7 +9,7 @@ use crate::{
         IndexMonitorResult, NotificationState,
     },
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use base64::Engine;
 
 use reqwest::Client;

@@ -29,8 +29,8 @@ fn parse_txn_p2p_amount(txn_view: SignedUserTransactionView) -> Result<Option<u1
     let amount = match txn_payload_view {
         TransactionPayloadView::ScriptFunction(function_view) => {
             info!(
-                "script function: {:?}::{:?}",
-                function_view.module, function_view.function
+                "parse_txn_p2p_amount | script function: {:?}::{:?}, args: {:?}",
+                function_view.module, function_view.function, function_view.args
             );
             if function_view.module
                 == ModuleIdView::from(ModuleId::new(

@@ -142,12 +142,14 @@ impl StcScanMonitor {
 
             loop {
                 // Get current block number
-                let current_block_number = rpc_client
-                    .chain_info()
-                    .expect("get current block number")
-                    .head
-                    .number
-                    .0;
+                let current_block_number = match rpc_client.chain_info() {
+                    Ok(chain_info) => chain_info.head.number.0,
+                    Err(e) => {
+                        error!("Failed to get current block number from RPC: {}", e);
+                        std::thread::sleep(std::time::Duration::from_millis(50000));
+                        continue;
+                    }
+                };
 
                 let cached_index_number: BlockNumber = match rt.block_on(async {
                     get_cached_index_block_numer(

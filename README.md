@@ -7,32 +7,17 @@ A comprehensive monitoring service for the Starcoin blockchain that tracks large
 - 🔍 **Real-time Monitoring**: Continuously monitors Starcoin blockchain for large transactions
 - 📱 **Telegram Integration**: Sends alerts to Telegram when large transactions are detected
 - 🤖 **Interactive Bot**: Telegram bot with commands to query transaction data
-- 💾 **Local Database**: Stores transaction data locally using SQLite
 - 📊 **Query Capabilities**: Query transactions by block range, get summaries, and check balances
 - 🚀 **PubSub Support**: Real-time event-driven monitoring using WebSocket subscriptions
 
-## Monitoring Modes
-
-### Polling Mode (Default)
-Traditional polling-based monitoring that periodically queries the blockchain.
-
 ```bash
 cargo run --release
-```
-
-### PubSub Mode
-Event-driven monitoring using WebSocket subscriptions for real-time updates.
-
-```bash
-cargo run --release -- --pubsub
 ```
 
 ## Telegram Bot Commands
 
 - `/start` or `/help` - Show help message with available commands
 - `/transactions <start_block> <end_block>` - Get large transactions in block range
-- `/summary <start_block> <end_block>` - Get transaction summary for block range
-- `/balance <address> [token]` - Get account balance (default: STC)
 
 ## Installation
 

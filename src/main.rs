@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod config;
+mod helper;
 mod monitor;
 mod monitor_dispatcher;
+mod monitor_handler;
 mod pubsub_client;
 mod stcscan_monitor;
 mod stcscan_monitor_index;
 mod telegram;
 mod types;
 
+use crate::monitor_handler::default_monitor_handler::DefaultMonitorHandler;
 use crate::telegram::TelegramBot;
 use anyhow::{ensure, Result};
 use clap::Parser;
@@ -47,15 +50,21 @@ fn main() -> Result<()> {
 
     // Init telegram bot
     let tg_bot = Arc::new(TelegramBot::new(config.clone(), rpc_client.clone()));
+    let monitor_handler = Arc::new(DefaultMonitorHandler::new(
+        rpc_client.clone(),
+        tg_bot.clone(),
+        config.clone(),
+    ));
 
     // Init monitor, do some compute-heavy work or call synchronous code
-    let monitor = monitor::Monitor::new(rpc_client.clone(), tg_bot.clone())
+    let monitor = monitor::Monitor::new(rpc_client.clone(), monitor_handler.clone())
         .expect("Failed to create monitor.");
     let mut handles = monitor.run()?;
     handles.push(tg_bot.run()?);
 
     // Init stc scan monitor
-    let stc_scan_monitor = StcScanMonitor::new(config.clone(), tg_bot.clone(), rpc_client.clone());
+    let stc_scan_monitor =
+        StcScanMonitor::new(config.clone(), monitor_handler.clone(), rpc_client.clone());
     handles.push(stc_scan_monitor.run()?);
 
     // Join handles

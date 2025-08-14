@@ -1,62 +1,14 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::Config, monitor_dispatcher::MonitorDispatcher};
-use anyhow::{anyhow, Result};
-use starcoin_rpc_api::chain::GetTransactionOption;
-use starcoin_rpc_api::types::{
-    BlockTransactionsView, BlockView, ModuleIdView, SignedUserTransactionView,
-    TransactionEventView, TransactionPayloadView,
-};
+use crate::config::Config;
+use crate::helper;
+use anyhow::Result;
 use starcoin_rpc_client::RpcClient;
-use starcoin_types::{
-    account_address::AccountAddress,
-    account_config::{genesis_address, WithdrawEvent},
-    block::BlockNumber,
-    identifier::Identifier,
-    language_storage::ModuleId,
-    language_storage::{StructTag, TypeTag},
-};
-use std::{str::FromStr, sync::Arc, thread::JoinHandle};
+use starcoin_types::block::BlockNumber;
+use std::{sync::Arc, thread::JoinHandle};
 use teloxide::{prelude::*, types::Message, Bot};
 use tracing::{error, info};
-
-fn parse_txn_p2p_amount(txn_view: SignedUserTransactionView) -> Result<Option<u128>> {
-    let txn_payload_view = txn_view
-        .raw_txn
-        .decoded_payload
-        .ok_or(anyhow!("should decode txn"))?;
-    let amount = match txn_payload_view {
-        TransactionPayloadView::ScriptFunction(function_view) => {
-            info!(
-                "parse_txn_p2p_amount | script function: {:?}::{:?}, args: {:?}",
-                function_view.module, function_view.function, function_view.args
-            );
-            if function_view.module
-                == ModuleIdView::from(ModuleId::new(
-                    AccountAddress::ONE,
-                    Identifier::new("TransferScripts")?,
-                ))
-                && function_view.function == Identifier::new("peer_to_peer_v2")?
-            {
-                function_view.args[1].0.as_u64().map(|n| n as u128)
-            } else if function_view.module
-                == ModuleIdView::from(ModuleId::new(
-                    AccountAddress::ONE,
-                    Identifier::new("TransferScripts")?,
-                ))
-                && function_view.function == Identifier::new("peer_to_peer")?
-            {
-                function_view.args[2].0.as_u64().map(|n| n as u128)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    };
-
-    Ok(amount)
-}
 
 async fn do_handle_blocks(
     rpc_client: Arc<RpcClient>,
@@ -65,60 +17,23 @@ async fn do_handle_blocks(
     end_num: BlockNumber,
 ) -> Result<Option<String>> {
     let rpc_client1 = rpc_client.clone();
-    let blocking_views = tokio::task::spawn_blocking(move || {
+    let block_views = tokio::task::spawn_blocking(move || {
         rpc_client1.chain_get_blocks_by_number(Some(start_num), end_num - start_num, None)
     })
     .await??;
 
-    if blocking_views.is_empty() {
+    if block_views.is_empty() {
         return Ok(Some(format!(
-            " No matched transactions found in blocks {} to {}",
+            "从区块 {} 到 {}， 没有找到大交易",
             start_num, end_num
         )));
     }
 
-    // Collect all transactions that need to be processed
-    let mut all_transactions = Vec::new();
-
-    // First, collect all transaction hashes that need to be fetched
-    let mut txn_hashes_to_fetch = Vec::new();
-    let mut full_transactions = Vec::new();
-
-    for block in &blocking_views {
-        match &block.body {
-            BlockTransactionsView::Hashes(txn_hashes) => {
-                txn_hashes_to_fetch.extend(txn_hashes.iter().cloned());
-            }
-            BlockTransactionsView::Full(txs) => {
-                full_transactions.extend(txs.iter().cloned());
-            }
-        }
-    }
-
-    // Now fetch detailed transaction info for hash types
-    for txn_hash in txn_hashes_to_fetch {
-        let rpc_client_clone = rpc_client.clone();
-        let txn_result = tokio::task::spawn_blocking(move || {
-            rpc_client_clone
-                .chain_get_transaction(txn_hash, Some(GetTransactionOption { decode: true }))
-                .ok()
-                .flatten()
-        })
-        .await?;
-
-        if let Some(txn) = txn_result {
-            if let Some(user_txn) = txn.user_transaction {
-                all_transactions.push(user_txn);
-            }
-        }
-    }
-
-    // Add the full transactions
-    all_transactions.extend(full_transactions);
-
+    let all_transactions =
+        helper::extract_full_txn_from_block_view(rpc_client.clone(), block_views).await?;
     if all_transactions.is_empty() {
         return Ok(Some(format!(
-            " No matched transactions found in blocks {} to {}",
+            "从区块 {} 到 {}， 没有找到大交易",
             start_num, end_num
         )));
     }
@@ -127,7 +42,7 @@ async fn do_handle_blocks(
     let mut matched_txn = Vec::new();
 
     for tx in all_transactions {
-        let amount = parse_txn_p2p_amount(tx.clone())?;
+        let amount = helper::parse_txn_p2p_amount(tx.clone())?;
         if config.min_transaction_amount < amount.unwrap_or(0) {
             matched_txn.push((tx.transaction_hash.clone(), amount));
         }
@@ -135,7 +50,7 @@ async fn do_handle_blocks(
 
     if matched_txn.is_empty() {
         return Ok(Some(format!(
-            " No matched transactions found in blocks {} to {}",
+            "从区块 {} 到 {}， 没有找到大交易",
             start_num, end_num
         )));
     }
@@ -146,9 +61,9 @@ async fn do_handle_blocks(
         .sum::<u128>();
 
     Ok(Some(format!(
-        "Block between: https://stcscan.io/main/blocks/height/{}, https://stcscan.io/main/blocks/height/{}
-         \nTransaction Total Amount  {:.9} STC,
-         \nTransaction List: {:?}",
+        "查询区块区间: https://stcscan.io/main/blocks/height/{}, https://stcscan.io/main/blocks/height/{}
+         \n交易总额  {:.9} STC,
+         \n交易列表: {:?}",
         start_num,
         end_num,
         (total_amount as f64) / (1e9f64),
@@ -339,14 +254,8 @@ impl TelegramBot {
         r#"
 🤖 **Starcoin Monitor Bot Commands**
 
-📊 **Query Commands:**
-• `/transactions <start_block> <end_block>` - Get large transactions in block range
-
-📝 **Examples:**
-• `/transactions 1000 1100` - Get of large peer to peer transactions from block 1000 to 1100
-
-💡 **Tips:**
-• Large transactions are automatically monitored and alerts are sent
+📊 **查询命令:**
+• `/transactions <start_block> <end_block>` - 查询两个区块之间的大交易
         "#
         .trim()
         .to_string()
@@ -433,73 +342,10 @@ impl TelegramBot {
     }
 }
 
-fn get_withdraw_amount(txn_event_view: &TransactionEventView) -> Result<Option<u128>> {
-    let struct_type_tag = match txn_event_view.type_tag.0.clone() {
-        TypeTag::Struct(struct_tag) => struct_tag,
-        _ => return Ok(None),
-    };
-    let withdraw_event_tag = StructTag {
-        address: genesis_address(),
-        module: Identifier::from_str("Account")?,
-        name: Identifier::from_str("WithdrawEvent")?,
-        type_params: vec![],
-    };
-
-    if *struct_type_tag != withdraw_event_tag {
-        return Ok(None);
-    };
-
-    let withdraw_event = WithdrawEvent::try_from_bytes(txn_event_view.data.0.as_slice())?;
-    Ok(Some(withdraw_event.amount()))
-}
-
-#[async_trait::async_trait]
-impl MonitorDispatcher for TelegramBot {
-    async fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
-        let withdraw_amount = get_withdraw_amount(event)?;
-        if withdraw_amount.is_none()
-            || withdraw_amount.unwrap() < self.config.min_transaction_amount
-        {
-            return Ok(());
-        };
-
-        let type_tag = match event.type_tag.0.clone() {
-            TypeTag::Struct(struct_tag) => struct_tag,
-            _ => return Ok(()),
-        };
-
-        let withdraw_amount = withdraw_amount.unwrap();
-        let msg = format!(
-            "🚨[Transfer Over-Limit]: There has an over-limit transaction event being executed here. block number: {:?}, txn_hash: {}, event type: {:?}, withdraw_amount: {:.9}",
-            event.block_number.unwrap().0, event.block_hash.unwrap().to_hex_literal(), type_tag.to_canonical_string(), withdraw_amount as f64 / 1e9
-        );
-        self.send_message(msg.as_str()).await
-    }
-
-    async fn dispatch_block(&self, _block: &BlockView) -> Result<()> {
-        //self.send_message(format!("block: {:?}", block).as_str())
-        //    .await
-        Ok(())
-    }
-
-    async fn dispatch_stcscan_index_exception(
-        &self,
-        curr_number: BlockNumber,
-        cached_number: BlockNumber,
-    ) -> Result<()> {
-        let msg = format!(
-            "🚨[STCScan Index Exception]: Current OnChain block number: {}, ES Cached index number: {}, Interval: {}",
-            curr_number,
-            cached_number,
-            curr_number - cached_number
-        );
-        self.send_message(msg.as_str()).await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helper;
     use starcoin_crypto::HashValue;
     use starcoin_rpc_api::chain::GetTransactionOption;
 
@@ -509,14 +355,14 @@ mod tests {
         let txn_view = rpc_client
             .chain_get_transaction(
                 HashValue::from_hex_literal(
-                    "0x8fb476816c3d59bb68376f4bf69ac36669d5ab48d03c3d2a4889b81b93e37e3c",
+                    "0x6ed3afdf412404f98fc16d9350b9a19d3258598be5f6b73215a6ab06247b6a53",
                 )?,
                 Some(GetTransactionOption { decode: true }),
             )?
             .expect("not have any txn");
 
-        let amount = parse_txn_p2p_amount(txn_view.user_transaction.unwrap())?.unwrap();
-        assert_eq!(amount, 10000000000000);
+        let amount = helper::parse_txn_p2p_amount(txn_view.user_transaction.unwrap())?.unwrap();
+        assert_eq!(amount, 14630926741510);
 
         Ok(())
     }

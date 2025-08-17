@@ -55,7 +55,7 @@ impl MonitorDispatcher for DefaultMonitorHandler {
                     let msg = format!(
                         "🚨[大交易事件告警]: 区块: https://stcscan.io/main/blocks/height/{:?}, 交易: https://stcscan.io/main/transactions/detail/{:?}, 额度: {:.9}",
                         height,
-                        txn_hash,
+                        txn_hash.to_hex_literal(),
                         amount as f64 / 1e9
                     );
                     self.tg_bot.send_message(msg.as_str()).await?;

@@ -1,4 +1,5 @@
 pub mod config;
+pub mod daily_notification;
 pub mod helper;
 pub mod monitor;
 pub mod monitor_dispatcher;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod config;
+mod daily_notification;
 mod helper;
 mod monitor;
 mod monitor_dispatcher;
@@ -12,6 +13,7 @@ mod stcscan_monitor_index;
 mod telegram;
 mod types;
 
+use crate::daily_notification::DailyNotificationService;
 use crate::monitor_handler::default_monitor_handler::DefaultMonitorHandler;
 use crate::telegram::TelegramBot;
 use anyhow::{ensure, Result};
@@ -66,6 +68,18 @@ fn main() -> Result<()> {
     let stc_scan_monitor =
         StcScanMonitor::new(config.clone(), monitor_handler.clone(), rpc_client.clone());
     handles.push(stc_scan_monitor.run()?);
+
+    let daily_notification = DailyNotificationService::new(config.clone(), tg_bot.clone());
+    handles.push(daily_notification.run()?);
+    // Init daily notification service
+    // let daily_notification_service = tokio::runtime::Runtime::new()?
+    //     .block_on(async { DailyNotificationService::new(config.clone(), tg_bot.clone()).await })?;
+    //
+    // // Run the async runtime
+    // tokio::runtime::Runtime::new()?.block_on(async {
+    //     daily_notification_service.start().await?;
+    //     Ok::<(), anyhow::Error>(())
+    // })?;
 
     // Join handles
     for handle in handles {

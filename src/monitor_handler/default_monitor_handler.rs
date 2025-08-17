@@ -5,13 +5,8 @@ use crate::{config::Config, helper, monitor_dispatcher::MonitorDispatcher, teleg
 use anyhow::Result;
 use starcoin_rpc_api::types::{BlockView, TransactionEventView};
 use starcoin_rpc_client::RpcClient;
-use starcoin_types::{
-    account_config::{genesis_address, WithdrawEvent},
-    block::BlockNumber,
-    identifier::Identifier,
-    language_storage::{StructTag, TypeTag},
-};
-use std::{str::FromStr, sync::Arc};
+use starcoin_types::block::BlockNumber;
+use std::sync::Arc;
 use tracing::info;
 
 pub struct DefaultMonitorHandler {
@@ -30,63 +25,18 @@ impl DefaultMonitorHandler {
     }
 }
 
-fn get_withdraw_amount(txn_event_view: &TransactionEventView) -> Result<Option<u128>> {
-    let struct_type_tag = match txn_event_view.type_tag.0.clone() {
-        TypeTag::Struct(struct_tag) => struct_tag,
-        _ => return Ok(None),
-    };
-    let withdraw_event_tag = StructTag {
-        address: genesis_address(),
-        module: Identifier::from_str("Account")?,
-        name: Identifier::from_str("WithdrawEvent")?,
-        type_params: vec![],
-    };
-
-    if *struct_type_tag != withdraw_event_tag {
-        return Ok(None);
-    };
-
-    let withdraw_event = WithdrawEvent::try_from_bytes(txn_event_view.data.0.as_slice())?;
-    Ok(Some(withdraw_event.amount()))
-}
-
 #[async_trait::async_trait]
 impl MonitorDispatcher for DefaultMonitorHandler {
-    async fn dispatch_event(&self, event: &TransactionEventView) -> Result<()> {
-        // let withdraw_amount = get_withdraw_amount(event)?;
-        // if withdraw_amount.is_none()
-        //     || withdraw_amount.unwrap() < self.config.min_transaction_amount
-        // {
-        //     return Ok(());
-        // };
-        //
-        // let type_tag = match event.type_tag.0.clone() {
-        //     TypeTag::Struct(struct_tag) => struct_tag,
-        //     _ => return Ok(()),
-        // };
-        //
-        // let withdraw_amount = withdraw_amount.unwrap();
-        // let msg = format!(
-        //     "🚨[大交易事件告警]: 区块号: {:?}, 交易哈希: {}, 事件类型: {:?}, 额度: {:.9}",
-        //     event.block_number.unwrap().0,
-        //     event.block_hash.unwrap().to_hex_literal(),
-        //     type_tag.to_canonical_string(),
-        //     withdraw_amount as f64 / 1e9
-        // );
-        // self.tg_bot.send_message(msg.as_str()).await
+    async fn dispatch_event(&self, _event: &TransactionEventView) -> Result<()> {
         Ok(())
     }
 
     async fn dispatch_block(&self, block_view: &BlockView) -> Result<()> {
         let height = block_view.header.number.0;
-        info!(
-            "dispatch_block | New block arrived: {}",
-            height
-        );
+        info!("dispatch_block | New block arrived: {}", height);
         if block_view.body.txn_hashes().is_empty() {
             return Ok(());
         }
-
 
         info!(
             "dispatch_block | The block have transactions, count: {}",

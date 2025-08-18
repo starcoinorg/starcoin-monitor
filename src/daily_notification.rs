@@ -15,6 +15,7 @@ use tracing::info;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TransferDocument {
     amount: String,
+    amount_value: Option<u128>,
     identifier: String,
     receiver: String,
     sender: String,
@@ -108,6 +109,8 @@ impl DailyNotificationService {
                         &config.es_user_name,
                         &config.es_password,
                         config.min_transaction_amount,
+                        get_today_start_timestamp(),
+                        get_today_end_timestamp(),
                     )
                     .await
                     {
@@ -134,11 +137,40 @@ impl DailyNotificationService {
     }
 }
 
+///
+/// GET /main.0727.transfer/_search
+// {
+//   "query": {
+//     "bool": {
+//       "filter": [
+//         {
+//           "range": {
+//             "timestamp": {
+//               "gte": 1753977600000,
+//               "lte": 1755187200000
+//             }
+//           }
+//         },
+//         {
+//           "range": {
+//             "amount_value": {
+//               "gt": 500000000000000
+//             }
+//           }
+//         }
+//       ]
+//     }
+//   },
+//   "size": 100,
+//   "sort": [{"timestamp": "desc"}]
+// }
 async fn query_daily_transfers(
     es_url: &str,
     es_user_name: &str,
     es_password: &str,
-    mint_trans_amount: u128,
+    min_trans_amount: u128,
+    start_time_mill_sec: u64,
+    end_time_mill_sec: u64,
 ) -> Result<Vec<TransferDocument>> {
     info!("Starting daily ES query for transfers...");
 
@@ -155,24 +187,31 @@ async fn query_daily_transfers(
             .encode(format!("{}:{}", es_user_name, es_password))
     );
 
-    // Get today's start timestamp (00:00:00)
-    let today = Utc::now().date_naive();
-    let today_start = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).unwrap());
-    let today_start_timestamp = today_start.timestamp_millis();
-
     let query = serde_json::json!({
-        "query": {
-            "range": {
+      "query": {
+        "bool": {
+          "filter": [
+            {
+              "range": {
                 "timestamp": {
-                    "gte": today_start_timestamp
+                  "gte": start_time_mill_sec,
+                  "lte": end_time_mill_sec
                 }
+              }
+            },
+            {
+              "range": {
+                "amount_value": {
+                  "gt": min_trans_amount,
+                }
+              }
             }
-        },
-        "size": 1000,
-        "sort": [{"timestamp": "asc"}]
+          ]
+        }
+      },
+      "size": 100,
+      "sort": [{"timestamp": "desc"}]
     });
-
-    info!("Querying ES with timestamp >= {}", today_start_timestamp);
 
     let response = client
         .post(&url)
@@ -201,7 +240,7 @@ async fn query_daily_transfers(
     );
 
     // Process and store the results for later notification
-    Ok(process_transfers(&es_response.hits.hits, mint_trans_amount))
+    Ok(process_transfers(&es_response.hits.hits, min_trans_amount))
 }
 
 async fn send_daily_summary(
@@ -225,7 +264,7 @@ async fn send_daily_summary(
 
     // Format the message
     let message = format!(
-        "📊 **每日交易汇总**\n\n\
+        "📊 [每日交易汇总]\n\n\
             📅 日期: {}\n\
             🔢 大额交易总数: {}\n\
             💰 交易总额: {:.9} STC\n",
@@ -243,18 +282,33 @@ async fn send_daily_summary(
 
 fn process_transfers(hits: &[EsHit], min_amount: u128) -> Vec<TransferDocument> {
     let mut large_transfers = Vec::new();
+    let mut seen_hashes = std::collections::HashSet::new();
+    let mut duplicate_count = 0;
 
     for hit in hits {
         let transfer = &hit.source;
 
+        // Skip if we've already seen this transaction hash
+        if seen_hashes.contains(&transfer.txn_hash) {
+            duplicate_count += 1;
+            continue;
+        }
+
         // Parse the amount from hex string
         if let Ok(amount) = parse_hex_amount(&transfer.amount) {
             if amount >= min_amount {
+                seen_hashes.insert(transfer.txn_hash.clone());
                 large_transfers.push(transfer.clone());
             }
         }
     }
 
+    info!(
+        "Filtered {} unique large transfers from {} total hits ({} duplicates removed)",
+        large_transfers.len(),
+        hits.len(),
+        duplicate_count
+    );
     large_transfers
 }
 
@@ -295,9 +349,44 @@ fn parse_hex_amount(hex_amount: &str) -> Result<u128> {
     Ok(amount)
 }
 
+fn get_today_start_timestamp() -> u64 {
+    // Get today's start timestamp (00:00:00)
+    let today = Utc::now().date_naive();
+    let today_start = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).unwrap());
+    today_start.timestamp_millis() as u64
+}
+
+fn get_date_start_timestamp(date_str: &str) -> u64 {
+    // Parse date string in format "YYYY-MM-DD" and return timestamp in milliseconds
+    // Example: "2025-08-20" -> timestamp for 2025-08-20 00:00:00
+    let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+        .expect("Invalid date format. Use YYYY-MM-DD");
+    let datetime = date.and_hms_opt(0, 0, 0).unwrap();
+    let utc_datetime = Utc.from_utc_datetime(&datetime);
+    utc_datetime.timestamp_millis() as u64
+}
+
+fn get_today_end_timestamp() -> u64 {
+    // Get today's end timestamp (23:59:59.999)
+    let today = Utc::now().date_naive();
+    let today_end = Utc.from_utc_datetime(&today.and_hms_opt(23, 59, 59).unwrap());
+    today_end.timestamp_millis() as u64
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn get_date_end_timestamp(date_str: &str) -> u64 {
+        // Parse date string in format "YYYY-MM-DD" and return timestamp in milliseconds
+        // Example: "2025-08-20" -> timestamp for 2025-08-20 23:59:59.999
+        let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+            .expect("Invalid date format. Use YYYY-MM-DD");
+        let datetime = date.and_hms_opt(23, 59, 59).unwrap();
+        let utc_datetime = Utc.from_utc_datetime(&datetime);
+        utc_datetime.timestamp_millis() as u64
+    }
 
     #[test]
     fn test_parse_hex_amount() {
@@ -320,6 +409,21 @@ mod tests {
     }
 
     #[test]
+    fn test_get_date_start_timestamp() {
+        // Test the new function for generating timestamps from date strings
+        let timestamp = get_date_start_timestamp("2025-08-20");
+        println!("2025-08-20 00:00:00 -> timestamp: {}", timestamp);
+
+        // Verify it's reasonable (should be in the future)
+        assert!(timestamp > 0);
+
+        // Test another date
+        let timestamp2 = get_date_start_timestamp("2024-01-01");
+        println!("2024-01-01 00:00:00 -> timestamp: {}", timestamp2);
+        assert!(timestamp2 > 0);
+    }
+
+    #[test]
     fn test_process_transfers() {
         let min_amount = 1000000000; // 1 STC in nano units
 
@@ -327,6 +431,7 @@ mod tests {
             EsHit {
                 source: TransferDocument {
                     amount: "0x0a000000000000000000000000000000".to_string(), // 10 (less than 1 STC)
+                    amount_value: Some(10 * 1e9 as u128),
                     identifier: "peer_to_peer".to_string(),
                     receiver: "0x4a50777e0e4f67625400148b04afd572".to_string(),
                     sender: "0xa77e09f66ea8ed586467e36ce89362b9".to_string(),
@@ -339,6 +444,7 @@ mod tests {
             EsHit {
                 source: TransferDocument {
                     amount: "0x583e2993a60100000000000000000000".to_string(), // 1814945152600 (much larger than 1 STC)
+                    amount_value: Some(1814945152600),
                     identifier: "peer_to_peer".to_string(),
                     receiver: "0x4a50777e0e4f67625400148b04afd572".to_string(),
                     sender: "0xa77e09f66ea8ed586467e36ce89362b9".to_string(),
@@ -360,14 +466,85 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_process_transfers_deduplication() {
+        let min_amount = 1000000000; // 1 STC in nano units
+
+        let hits = vec![
+            // First occurrence of a transaction
+            EsHit {
+                source: TransferDocument {
+                    amount: "0x583e2993a60100000000000000000000".to_string(), // 1814945152600
+                    amount_value: Some(1814945152600),
+                    identifier: "peer_to_peer".to_string(),
+                    receiver: "0x4a50777e0e4f67625400148b04afd572".to_string(),
+                    sender: "0xa77e09f66ea8ed586467e36ce89362b9".to_string(),
+                    timestamp: 1621314570704,
+                    txn_hash: "0x17188cdb0d7155e75abb126ddc2359d5ac31d686f337118d65f1adc6650d4d38"
+                        .to_string(),
+                    type_tag: "0x00000000000000000000000000000001::STC::STC".to_string(),
+                },
+            },
+            // Duplicate transaction with same hash but different timestamp
+            EsHit {
+                source: TransferDocument {
+                    amount: "0x583e2993a60100000000000000000000".to_string(), // Same amount
+                    amount_value: Some(1814945152600),
+                    identifier: "peer_to_peer_v2".to_string(), // Different identifier
+                    receiver: "0x4a50777e0e4f67625400148b04afd572".to_string(),
+                    sender: "0xa77e09f66ea8ed586467e36ce89362b9".to_string(),
+                    timestamp: 1621314570705, // Different timestamp
+                    txn_hash: "0x17188cdb0d7155e75abb126ddc2359d5ac31d686f337118d65f1adc6650d4d38"
+                        .to_string(), // Same hash
+                    type_tag: "0x00000000000000000000000000000001::STC::STC".to_string(),
+                },
+            },
+            // Another unique transaction
+            EsHit {
+                source: TransferDocument {
+                    amount: "0x12771f5f7f0000000000000000000000".to_string(), // Different amount
+                    amount_value: Some(123456789),
+                    identifier: "peer_to_peer".to_string(),
+                    receiver: "0x0782a3dd4f2e460f19270ff3ade92335".to_string(),
+                    sender: "0x37ecc0f8a066bd63039514681fcc321d".to_string(),
+                    timestamp: 1621314570706,
+                    txn_hash: "0x96d51c50925644172227011b0f3370f75d55d3887d08da6981e37e9e97596c26"
+                        .to_string(), // Different hash
+                    type_tag: "0x00000000000000000000000000000001::STC::STC".to_string(),
+                },
+            },
+        ];
+
+        let large_transfers = process_transfers(&hits, min_amount);
+
+        // Should only get 2 unique transactions (duplicates filtered out)
+        assert_eq!(large_transfers.len(), 2);
+
+        // Verify unique hashes
+        let hashes: std::collections::HashSet<_> =
+            large_transfers.iter().map(|t| &t.txn_hash).collect();
+        assert_eq!(hashes.len(), 2);
+
+        // Verify the specific hashes we expect
+        let hash1 = "0x17188cdb0d7155e75abb126ddc2359d5ac31d686f337118d65f1adc6650d4d38";
+        let hash2 = "0x96d51c50925644172227011b0f3370f75d55d3887d08da6981e37e9e97596c26";
+        assert!(hashes.contains(&hash1.to_string()));
+        assert!(hashes.contains(&hash2.to_string()));
+    }
+
     #[ignore]
     #[tokio::test]
-    async fn test_parse_hex_amount_error() -> Result<()> {
+    async fn test_query_daily_transfers() -> Result<()> {
+        // This test requires a real ES connection, so we'll skip it in CI/CD
+        // Uncomment and configure with valid ES credentials for local testing
+
         let txn_docs = query_daily_transfers(
             "http://127.0.0.1:9200",
             "elastic",
             "passwd",
             100u128 * 1e9 as u128,
+            get_date_start_timestamp("2025-08-01"),
+            get_date_start_timestamp("2025-08-15"),
         )
         .await?;
         println!("{:?}", txn_docs);
@@ -382,6 +559,51 @@ mod tests {
             txn_docs,
             total_amount as f64 / 1e9
         );
+
         Ok(())
+    }
+
+    #[test]
+    fn test_get_today_end_timestamp() {
+        // Test getting today's end timestamp
+        let end_timestamp = get_today_end_timestamp();
+        let start_timestamp = get_today_start_timestamp();
+        
+        println!("Today start: {}, Today end: {}", start_timestamp, end_timestamp);
+        
+        // End timestamp should be greater than start timestamp
+        assert!(end_timestamp > start_timestamp);
+        
+        // Difference should be approximately 23 hours, 59 minutes, 59 seconds
+        let diff = end_timestamp - start_timestamp;
+        let expected_diff = 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000; // 23:59:59 in milliseconds
+        // For u64, we need to handle potential underflow
+        if diff >= expected_diff {
+            assert!(diff - expected_diff < 1000); // Allow 1 second tolerance
+        } else {
+            assert!(expected_diff - diff < 1000); // Allow 1 second tolerance
+        }
+    }
+
+    #[test]
+    fn test_get_date_end_timestamp() {
+        // Test getting end timestamp for a specific date
+        let end_timestamp = get_date_end_timestamp("2025-08-20");
+        let start_timestamp = get_date_start_timestamp("2025-08-20");
+        
+        println!("2025-08-20 start: {}, 2025-08-20 end: {}", start_timestamp, end_timestamp);
+        
+        // End timestamp should be greater than start timestamp
+        assert!(end_timestamp > start_timestamp);
+        
+        // Difference should be approximately 23 hours, 59 minutes, 59 seconds
+        let diff = end_timestamp - start_timestamp;
+        let expected_diff = 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000; // 23:59:59 in milliseconds
+        // For u64, we need to handle potential underflow
+        if diff >= expected_diff {
+            assert!(diff - expected_diff < 1000); // Allow 1 second tolerance
+        } else {
+            assert!(expected_diff - diff < 1000); // Allow 1 second tolerance
+        }
     }
 }

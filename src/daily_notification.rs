@@ -249,9 +249,16 @@ async fn send_daily_summary(
 ) -> Result<()> {
     info!("Sending daily summary notification...");
 
+    let today = Utc::now().format("%Y-%m-%d");
+
     if daily_results.is_empty() {
-        let message = "📊 **每日交易汇总**\n\n今日没有发现大额交易";
-        telegram_bot.send_message(message).await?;
+        let message = format!(
+            "📊 【每日交易汇总】\n\n\
+        📅 日期: {}\n\
+        今日没有发现大额交易",
+            today
+        );
+        telegram_bot.send_message(&message).await?;
         return Ok(());
     }
 
@@ -264,7 +271,7 @@ async fn send_daily_summary(
 
     // Format the message
     let message = format!(
-        "📊 [每日交易汇总]\n\n\
+        "📊 【每日交易汇总】\n\n\
             📅 日期: {}\n\
             🔢 大额交易总数: {}\n\
             💰 交易总额: {:.9} STC\n",

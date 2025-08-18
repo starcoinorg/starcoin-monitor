@@ -356,16 +356,6 @@ fn get_today_start_timestamp() -> u64 {
     today_start.timestamp_millis() as u64
 }
 
-fn get_date_start_timestamp(date_str: &str) -> u64 {
-    // Parse date string in format "YYYY-MM-DD" and return timestamp in milliseconds
-    // Example: "2025-08-20" -> timestamp for 2025-08-20 00:00:00
-    let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-        .expect("Invalid date format. Use YYYY-MM-DD");
-    let datetime = date.and_hms_opt(0, 0, 0).unwrap();
-    let utc_datetime = Utc.from_utc_datetime(&datetime);
-    utc_datetime.timestamp_millis() as u64
-}
-
 fn get_today_end_timestamp() -> u64 {
     // Get today's end timestamp (23:59:59.999)
     let today = Utc::now().date_naive();
@@ -373,10 +363,19 @@ fn get_today_end_timestamp() -> u64 {
     today_end.timestamp_millis() as u64
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn get_date_start_timestamp(date_str: &str) -> u64 {
+        // Parse date string in format "YYYY-MM-DD" and return timestamp in milliseconds
+        // Example: "2025-08-20" -> timestamp for 2025-08-20 00:00:00
+        let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+            .expect("Invalid date format. Use YYYY-MM-DD");
+        let datetime = date.and_hms_opt(0, 0, 0).unwrap();
+        let utc_datetime = Utc.from_utc_datetime(&datetime);
+        utc_datetime.timestamp_millis() as u64
+    }
 
     fn get_date_end_timestamp(date_str: &str) -> u64 {
         // Parse date string in format "YYYY-MM-DD" and return timestamp in milliseconds
@@ -568,16 +567,19 @@ mod tests {
         // Test getting today's end timestamp
         let end_timestamp = get_today_end_timestamp();
         let start_timestamp = get_today_start_timestamp();
-        
-        println!("Today start: {}, Today end: {}", start_timestamp, end_timestamp);
-        
+
+        println!(
+            "Today start: {}, Today end: {}",
+            start_timestamp, end_timestamp
+        );
+
         // End timestamp should be greater than start timestamp
         assert!(end_timestamp > start_timestamp);
-        
+
         // Difference should be approximately 23 hours, 59 minutes, 59 seconds
         let diff = end_timestamp - start_timestamp;
         let expected_diff = 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000; // 23:59:59 in milliseconds
-        // For u64, we need to handle potential underflow
+                                                                              // For u64, we need to handle potential underflow
         if diff >= expected_diff {
             assert!(diff - expected_diff < 1000); // Allow 1 second tolerance
         } else {
@@ -590,16 +592,19 @@ mod tests {
         // Test getting end timestamp for a specific date
         let end_timestamp = get_date_end_timestamp("2025-08-20");
         let start_timestamp = get_date_start_timestamp("2025-08-20");
-        
-        println!("2025-08-20 start: {}, 2025-08-20 end: {}", start_timestamp, end_timestamp);
-        
+
+        println!(
+            "2025-08-20 start: {}, 2025-08-20 end: {}",
+            start_timestamp, end_timestamp
+        );
+
         // End timestamp should be greater than start timestamp
         assert!(end_timestamp > start_timestamp);
-        
+
         // Difference should be approximately 23 hours, 59 minutes, 59 seconds
         let diff = end_timestamp - start_timestamp;
         let expected_diff = 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000; // 23:59:59 in milliseconds
-        // For u64, we need to handle potential underflow
+                                                                              // For u64, we need to handle potential underflow
         if diff >= expected_diff {
             assert!(diff - expected_diff < 1000); // Allow 1 second tolerance
         } else {

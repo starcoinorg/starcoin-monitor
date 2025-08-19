@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: starcoin-monitor
-          image: ghcr.io/starcoinorg/starcoin-monitor:sha-10436f9
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-d5d6274
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL
@@ -54,20 +54,26 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-#          livenessProbe:
-#            exec:
-#              command:
-#                - pgrep
-#                - starcoin-monitor
-#            initialDelaySeconds: 30
-#            periodSeconds: 10
-#          readinessProbe:
-#            exec:
-#              command:
-#                - pgrep
-#                - starcoin-monitor
-#            initialDelaySeconds: 5
-#            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "ls /proc/*/exe 2>/dev/null | xargs -I {} readlink {} 2>/dev/null | grep -q starcoin-monitor || exit 1"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "ls /proc/*/exe 2>/dev/null | xargs -I {} readlink {} 2>/dev/null | grep -q starcoin-monitor || exit 1"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
           volumeMounts:
             - name: temp-volume
               mountPath: /app/data

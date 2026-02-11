@@ -269,15 +269,24 @@ async fn send_daily_summary(
         .map(|t| parse_hex_amount(&t.amount).unwrap_or(0))
         .sum();
 
+    // Build transaction links
+    let tx_links: Vec<String> = daily_results
+        .iter()
+        .map(|t| format!("https://stcscan.io/main/transactions/detail/{}", t.txn_hash))
+        .collect();
+    let tx_links_str = tx_links.join("\n");
+
     // Format the message
     let message = format!(
         "📊 【每日交易汇总】\n\n\
             📅 日期: {}\n\
             🔢 大额交易总数: {}\n\
-            💰 交易总额: {:.9} STC\n",
+            💰 交易总额: {:.9} STC\n\n\
+            🔗 交易详情:\n{}",
         Utc::now().format("%Y-%m-%d"),
         total_transfers,
         (total_amount as f64) / 1e9,
+        tx_links_str,
     );
 
     // Send the message

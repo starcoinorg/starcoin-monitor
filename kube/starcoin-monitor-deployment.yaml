@@ -1,3 +1,41 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: starcoin-monitor
+  namespace: default
+---
+# Disk alerts read each kubelet's /stats/summary through the API server proxy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: starcoin-monitor
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - nodes
+  verbs:
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - nodes/proxy
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: starcoin-monitor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: starcoin-monitor
+subjects:
+- kind: ServiceAccount
+  name: starcoin-monitor
+  namespace: default
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,9 +53,10 @@ spec:
       labels:
         app: starcoin-monitor
     spec:
+      serviceAccountName: starcoin-monitor
       containers:
         - name: starcoin-monitor
-          image: ghcr.io/starcoinorg/starcoin-monitor:sha-7d8280b
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-7a6d96f
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL

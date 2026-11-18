@@ -2,7 +2,7 @@ name: Build Docker and deploy
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
   release:
     types: [ published ]
@@ -44,8 +44,8 @@ jobs:
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}
       - name: deploy cluster
-        # Only deploy on master.
-        if: github.ref == 'refs/heads/master'
+        # Only deploy on main.
+        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           IMAGE_VERSION: ${{steps.docker_meta.outputs.version}}

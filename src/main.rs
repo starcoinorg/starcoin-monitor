@@ -1,6 +1,7 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod alerts;
 mod config;
 mod daily_notification;
 mod helper;
@@ -71,6 +72,8 @@ fn main() -> Result<()> {
 
     let daily_notification = DailyNotificationService::new(config.clone(), tg_bot.clone());
     handles.push(daily_notification.run()?);
+
+    handles.push(alerts::run(tg_bot.clone())?);
     // Init daily notification service
     // let daily_notification_service = tokio::runtime::Runtime::new()?
     //     .block_on(async { DailyNotificationService::new(config.clone(), tg_bot.clone()).await })?;

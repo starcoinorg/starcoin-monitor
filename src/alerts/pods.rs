@@ -52,6 +52,8 @@ pub struct Meta {
 pub struct Status {
     #[serde(default)]
     pub phase: String,
+    // Kubernetes spells it `podIP`, which camelCase would turn into `podIp`.
+    #[serde(rename = "podIP")]
     pub pod_ip: Option<String>,
     #[serde(default)]
     pub container_statuses: Vec<ContainerStatus>,
@@ -277,6 +279,15 @@ mod tests {
         assert!(pod_findings(&at("2026-11-19T05:11:39Z"), NOW)[0]
             .problem
             .is_none());
+    }
+
+    #[test]
+    fn reads_the_pod_ip() {
+        let list = pods(json!([
+            {"metadata": {"name": "a", "namespace": "n"},
+             "status": {"phase": "Running", "podIP": "10.244.2.41"}}
+        ]));
+        assert_eq!(list.items[0].status.pod_ip.as_deref(), Some("10.244.2.41"));
     }
 
     #[test]

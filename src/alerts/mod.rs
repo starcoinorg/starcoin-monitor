@@ -88,6 +88,9 @@ fn messages(
 ) -> Vec<String> {
     let mut out = vec![];
     for f in findings {
+        if let Some(p) = &f.problem {
+            warn!("alerts | {}: {p} {}", f.key, f.detail);
+        }
         let alarm = alarms.entry(f.key.clone()).or_default();
         let (next, action) = alarm.step(f.problem.is_some(), now, rule);
         *alarm = next;

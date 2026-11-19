@@ -27,7 +27,7 @@ pub struct Head {
     pub hash: String,
 }
 
-async fn fetch_head(http: &reqwest::Client, url: &str) -> Result<Head> {
+pub async fn fetch_head(http: &reqwest::Client, url: &str) -> Result<Head> {
     let body = json!({"id": 1, "jsonrpc": "2.0", "method": "chain.info", "params": []});
     let v: Value = http
         .post(url)

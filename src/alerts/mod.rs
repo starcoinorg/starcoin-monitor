@@ -1,13 +1,15 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Infrastructure alerts: Main block production, payout settlement, bridge transfers and
-//! disk usage. Each check runs on its own schedule in one thread and reports through the
+//! Infrastructure alerts: Main block production, payout settlement, bridge transfers, disk
+//! usage, pod crashes and Main seed lag. Each check runs on its own schedule in one thread and reports through the
 //! same Telegram bot as the large-transfer alerts.
 
 pub mod bridge;
 pub mod chain;
 pub mod disk;
+pub mod kube;
+pub mod pods;
 pub mod rule;
 
 use crate::telegram::TelegramBot;
@@ -30,6 +32,17 @@ const DISK: Rule = Rule {
     after: 1,
     repeat: Duration::from_secs(6 * 3600),
 };
+const POD: Rule = Rule {
+    every: Duration::from_secs(60),
+    after: 1,
+    repeat: Duration::from_secs(1200),
+};
+/// Shares POD's schedule; three bad checks ride out a planned seed restart.
+const SEED_LAG: Rule = Rule {
+    every: Duration::from_secs(60),
+    after: 3,
+    repeat: Duration::from_secs(1200),
+};
 const BRIDGE_EVERY: Duration = Duration::from_secs(300);
 const TICK: Duration = Duration::from_secs(30);
 
@@ -39,10 +52,17 @@ enum Check {
     Settlement,
     Disk,
     Bridge,
+    Pods,
 }
 
 impl Check {
-    const ALL: [Check; 4] = [Check::Block, Check::Settlement, Check::Disk, Check::Bridge];
+    const ALL: [Check; 5] = [
+        Check::Block,
+        Check::Settlement,
+        Check::Disk,
+        Check::Bridge,
+        Check::Pods,
+    ];
 
     fn every(self) -> Duration {
         match self {
@@ -50,6 +70,7 @@ impl Check {
             Check::Settlement => SETTLEMENT.every,
             Check::Disk => DISK.every,
             Check::Bridge => BRIDGE_EVERY,
+            Check::Pods => POD.every,
         }
     }
 }
@@ -90,10 +111,10 @@ pub fn run(tg_bot: Arc<TelegramBot>) -> anyhow::Result<JoinHandle<()>> {
     let http = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .build()?;
-    let kube = match disk::Kube::in_cluster() {
+    let kube = match kube::Kube::in_cluster() {
         Ok(k) => Some(k),
         Err(e) => {
-            warn!("alerts | disk check disabled until restart: {e}");
+            warn!("alerts | disk and pod checks disabled until restart: {e}");
             None
         }
     };
@@ -126,6 +147,12 @@ pub fn run(tg_bot: Arc<TelegramBot>) -> anyhow::Result<JoinHandle<()>> {
                         ),
                         Check::Disk => messages(&mut alarms, disk::check(&kube, t).await, t, &DISK),
                         Check::Bridge => bridge.run(&http, t).await,
+                        Check::Pods => {
+                            let (pod, lag) = pods::check(&kube, &http, t).await;
+                            let mut m = messages(&mut alarms, pod, t, &POD);
+                            m.extend(messages(&mut alarms, lag, t, &SEED_LAG));
+                            m
+                        }
                     };
                     let bad: Vec<_> = alarms
                         .iter()

@@ -4,14 +4,13 @@
 //! Disk usage of every node's root disk and every mounted PVC, from each kubelet's
 //! /stats/summary read through the API server. Needs `list nodes` and `get nodes/proxy`.
 
+use super::kube::Kube;
 use super::rule::{Finding, UnixSecs};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
 const MAX_USED: f64 = 0.85;
-const K8S_API: &str = "https://kubernetes.default.svc";
-const SA_DIR: &str = "/var/run/secrets/kubernetes.io/serviceaccount";
 
 #[derive(Debug, Deserialize)]
 pub struct Summary {
@@ -103,63 +102,34 @@ pub fn findings(usage: &BTreeMap<String, Usage>) -> Vec<Finding> {
         .collect()
 }
 
-/// API server client using the pod's service account.
-pub struct Kube {
-    http: reqwest::Client,
-}
-
-impl Kube {
-    pub fn in_cluster() -> Result<Self> {
-        let ca = std::fs::read(format!("{SA_DIR}/ca.crt")).context("read service account CA")?;
-        let http = reqwest::Client::builder()
-            .add_root_certificate(reqwest::Certificate::from_pem(&ca)?)
-            .timeout(std::time::Duration::from_secs(20))
-            .build()?;
-        Ok(Self { http })
+async fn all_usage(kube: &Kube) -> Result<BTreeMap<String, Usage>> {
+    #[derive(Deserialize)]
+    struct Nodes {
+        items: Vec<Item>,
     }
-
-    async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
-        // The projected token rotates; read it for every request.
-        let token = std::fs::read_to_string(format!("{SA_DIR}/token"))
-            .context("read service account token")?;
-        let resp = self
-            .http
-            .get(format!("{K8S_API}{path}"))
-            .bearer_auth(token.trim())
-            .send()
+    #[derive(Deserialize)]
+    struct Item {
+        metadata: Meta,
+    }
+    #[derive(Deserialize)]
+    struct Meta {
+        name: String,
+    }
+    let nodes: Nodes = kube.get("/api/v1/nodes").await?;
+    let mut out = BTreeMap::new();
+    for n in nodes.items {
+        let name = n.metadata.name;
+        let s: Summary = kube
+            .get(&format!("/api/v1/nodes/{name}/proxy/stats/summary"))
             .await?;
-        Ok(resp.error_for_status()?.json().await?)
+        out.extend(usage(&name, &s));
     }
-
-    async fn all_usage(&self) -> Result<BTreeMap<String, Usage>> {
-        #[derive(Deserialize)]
-        struct Nodes {
-            items: Vec<Item>,
-        }
-        #[derive(Deserialize)]
-        struct Item {
-            metadata: Meta,
-        }
-        #[derive(Deserialize)]
-        struct Meta {
-            name: String,
-        }
-        let nodes: Nodes = self.get("/api/v1/nodes").await?;
-        let mut out = BTreeMap::new();
-        for n in nodes.items {
-            let name = n.metadata.name;
-            let s: Summary = self
-                .get(&format!("/api/v1/nodes/{name}/proxy/stats/summary"))
-                .await?;
-            out.extend(usage(&name, &s));
-        }
-        Ok(out)
-    }
+    Ok(out)
 }
 
 pub async fn check(kube: &Option<Kube>, _now: UnixSecs) -> Vec<Finding> {
     let read = match kube {
-        Some(k) => k.all_usage().await,
+        Some(k) => all_usage(k).await,
         None => Err(anyhow::anyhow!(
             "not running in Kubernetes (no service account)"
         )),

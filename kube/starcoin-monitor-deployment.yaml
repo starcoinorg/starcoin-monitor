@@ -22,6 +22,12 @@ rules:
   - nodes/proxy
   verbs:
   - get
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

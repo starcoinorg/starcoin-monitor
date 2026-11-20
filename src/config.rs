@@ -1,7 +1,7 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::env;
 
@@ -18,61 +18,91 @@ pub struct Config {
 }
 
 impl Config {
+    /// Reads `.env` and the process environment once, at the process boundary.
     pub fn load() -> Result<Self> {
         dotenv::dotenv().ok();
+        Self::from_vars(|name| match env::var(name) {
+            Ok(value) => Ok(Some(value)),
+            Err(env::VarError::NotPresent) => Ok(None),
+            Err(e) => Err(anyhow!("{name}: {e}")),
+        })
+    }
 
-        let config = Config {
-            starcoin_rpc_url: env::var("STARCOIN_RPC_URL")
-                .unwrap_or_else(|_| "ws://main.seed.starcoin.org:9870".to_string()),
-            telegram_bot_token: env::var("TELEGRAM_BOT_TOKEN")
-                .expect("TELEGRAM_BOT_TOKEN is not set"),
-            telegram_chat_id: env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID is not set"),
-            telegram_proxy: env::var("TELOXIDE_PROXY").map(Some).or_else(|e| match e {
-                env::VarError::NotPresent => Ok(None),
-                _ => Err(e),
-            })?,
-            min_transaction_amount: env::var("MIN_TRANSACTION_AMOUNT")
-                .unwrap_or_else(|_| "1000000000".to_string())
-                .parse()
-                .unwrap_or(100_000_000), // 1 STC in nano units
-            es_url: env::var("ES_URL").unwrap_or_else(|_| "http://127.0.0.1:9200".to_string()),
-            es_user_name: env::var("ES_USER_NAME").unwrap_or_else(|_| "elastic".to_string()),
-            es_password: env::var("ES_PASSWORD").unwrap_or_else(|_| "changeme".to_string()),
+    /// Builds the config from a variable lookup, so parsing is testable without the process env.
+    pub fn from_vars(var: impl Fn(&str) -> Result<Option<String>>) -> Result<Self> {
+        let required = |name: &str| var(name)?.ok_or_else(|| anyhow!("{name} is not set"));
+        let or_default = |name: &str, default: &str| -> Result<String> {
+            Ok(var(name)?.unwrap_or_else(|| default.to_string()))
         };
-
-        Ok(config)
+        let min_transaction_amount = or_default("MIN_TRANSACTION_AMOUNT", "1000000000")?;
+        Ok(Config {
+            starcoin_rpc_url: or_default("STARCOIN_RPC_URL", "ws://main.seed.starcoin.org:9870")?,
+            telegram_bot_token: required("TELEGRAM_BOT_TOKEN")?,
+            telegram_chat_id: required("TELEGRAM_CHAT_ID")?,
+            telegram_proxy: var("TELOXIDE_PROXY")?,
+            min_transaction_amount: min_transaction_amount.parse().with_context(|| {
+                format!("MIN_TRANSACTION_AMOUNT is not a u128: {min_transaction_amount}")
+            })?,
+            es_url: or_default("ES_URL", "http://127.0.0.1:9200")?,
+            es_user_name: or_default("ES_USER_NAME", "elastic")?,
+            es_password: or_default("ES_PASSWORD", "changeme")?,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    fn config_from(pairs: &[(&str, &str)]) -> Result<Config> {
+        let vars: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        Config::from_vars(|name| Ok(vars.get(name).cloned()))
+    }
+
+    const TELEGRAM: [(&str, &str); 2] =
+        [("TELEGRAM_BOT_TOKEN", "token"), ("TELEGRAM_CHAT_ID", "42")];
 
     #[test]
     fn test_config_default_es_url() {
-        // Clear any existing ES_URL environment variable
-        std::env::remove_var("ES_URL");
-
-        let config = Config::load().expect("Failed to load config");
+        let config = config_from(&TELEGRAM).unwrap();
         assert_eq!(config.es_url, "http://127.0.0.1:9200");
         assert_eq!(config.es_user_name, "elastic");
         assert_eq!(config.es_password, "changeme");
+        assert_eq!(config.min_transaction_amount, 1_000_000_000);
+        assert_eq!(config.telegram_proxy, None);
     }
 
     #[test]
     fn test_config_custom_es_url() {
-        std::env::set_var("ES_URL", "http://localhost:9200");
-        std::env::set_var("ES_USER_NAME", "admin");
-        std::env::set_var("ES_PASSWORD", "secret");
-
-        let config = Config::load().expect("Failed to load config");
+        let mut pairs = TELEGRAM.to_vec();
+        pairs.extend([
+            ("ES_URL", "http://localhost:9200"),
+            ("ES_USER_NAME", "admin"),
+            ("ES_PASSWORD", "secret"),
+            ("MIN_TRANSACTION_AMOUNT", "500000000000000"),
+        ]);
+        let config = config_from(&pairs).unwrap();
         assert_eq!(config.es_url, "http://localhost:9200");
         assert_eq!(config.es_user_name, "admin");
         assert_eq!(config.es_password, "secret");
+        assert_eq!(config.min_transaction_amount, 500_000_000_000_000);
+    }
 
-        // Clean up
-        std::env::remove_var("ES_URL");
-        std::env::remove_var("ES_USER_NAME");
-        std::env::remove_var("ES_PASSWORD");
+    #[test]
+    fn missing_telegram_token_is_an_error() {
+        let err = config_from(&[("TELEGRAM_CHAT_ID", "42")]).unwrap_err();
+        assert!(err.to_string().contains("TELEGRAM_BOT_TOKEN"), "{err}");
+    }
+
+    #[test]
+    fn unparsable_min_amount_is_an_error() {
+        let mut pairs = TELEGRAM.to_vec();
+        pairs.push(("MIN_TRANSACTION_AMOUNT", "5e14"));
+        let err = config_from(&pairs).unwrap_err();
+        assert!(err.to_string().contains("MIN_TRANSACTION_AMOUNT"), "{err}");
     }
 }

@@ -47,9 +47,7 @@ impl Monitor {
                 .expect("should subscribe new events");
         });
 
-        let mut handles = Vec::new();
-        handles.push(event_watch_handle);
-        handles.push(block_watch_handle);
+        let handles = vec![event_watch_handle, block_watch_handle];
 
         info!("Monitor::run | Exited");
         Ok(handles)

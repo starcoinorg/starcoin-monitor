@@ -44,7 +44,7 @@ async fn do_handle_blocks(
     for tx in all_transactions {
         let amount = helper::parse_txn_p2p_amount(tx.clone())?;
         if config.min_transaction_amount < amount.unwrap_or(0) {
-            matched_txn.push((tx.transaction_hash.clone(), amount));
+            matched_txn.push((tx.transaction_hash, amount));
         }
     }
 
@@ -104,11 +104,11 @@ impl TelegramBot {
         // Create reqwest client with proxy and longer timeout
         let client = reqwest::Client::builder()
             .proxy(
-                reqwest::Proxy::http(&format!("http://{}", proxy_url))
+                reqwest::Proxy::http(format!("http://{}", proxy_url))
                     .expect("Failed to create HTTP proxy"),
             )
             .proxy(
-                reqwest::Proxy::https(&format!("http://{}", proxy_url))
+                reqwest::Proxy::https(format!("http://{}", proxy_url))
                     .expect("Failed to create HTTPS proxy"),
             )
             .timeout(std::time::Duration::from_secs(60)) // Increased timeout to 60 seconds

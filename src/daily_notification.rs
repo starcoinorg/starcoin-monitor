@@ -330,11 +330,7 @@ fn process_transfers(hits: &[EsHit], min_amount: u128) -> Vec<TransferDocument> 
 
 fn parse_hex_amount(hex_amount: &str) -> Result<u128> {
     // Remove "0x" prefix if present
-    let hex_str = if hex_amount.starts_with("0x") {
-        &hex_amount[2..]
-    } else {
-        hex_amount
-    };
+    let hex_str = hex_amount.strip_prefix("0x").unwrap_or(hex_amount);
 
     // Convert hex string to bytes using hex crate
     let bytes = hex::decode(hex_str)?;
@@ -348,7 +344,7 @@ fn parse_hex_amount(hex_amount: &str) -> Result<u128> {
     }
 
     // Pad to 16 bytes if necessary (add zeros at the end for little-endian)
-    let mut padded_bytes = vec![0u8; 16];
+    let mut padded_bytes = [0u8; 16];
     for (i, &byte) in bytes.iter().enumerate() {
         if i < 16 {
             padded_bytes[i] = byte;

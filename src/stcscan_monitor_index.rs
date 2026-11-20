@@ -22,17 +22,9 @@ impl Default for IndexMonitorConfig {
 }
 
 /// State for tracking notification timing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NotificationState {
     pub latest_notify_time: u64,
-}
-
-impl Default for NotificationState {
-    fn default() -> Self {
-        Self {
-            latest_notify_time: 0,
-        }
-    }
 }
 
 /// Result of index monitoring check
@@ -260,8 +252,9 @@ mod tests {
     #[test]
     fn test_check_index_monitor_state_no_action_due_to_time() {
         let config = IndexMonitorConfig::default();
-        let mut state = NotificationState::default();
-        state.latest_notify_time = Utc::now().timestamp() as u64 - 100; // Recent notification
+        let state = NotificationState {
+            latest_notify_time: Utc::now().timestamp() as u64 - 100, // Recent notification
+        };
 
         // Large difference but recent notification
         let result = check_index_monitor_state(1200, 100, &state, &config);

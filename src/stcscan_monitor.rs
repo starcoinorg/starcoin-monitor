@@ -29,7 +29,7 @@ pub struct StcScanMonitor {
 /// use es name and password from config object
 ///
 /// Reference the command by following
-/// ```
+/// ```text
 /// GET /main.0727.blocks/_mapping
 /// {
 ///   "main.0727.blocks" : {
@@ -220,7 +220,7 @@ mod test {
     #[tokio::test]
     async fn test_get_cached_index_block_numer() -> Result<()> {
         let block_number =
-            get_cached_index_block_numer(&"http://127.0.0.1:9200", &"elastic", &"pass").await?;
+            get_cached_index_block_numer("http://127.0.0.1:9200", "elastic", "pass").await?;
         assert_ne!(block_number, 0);
         Ok(())
     }

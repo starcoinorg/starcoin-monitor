@@ -12,7 +12,6 @@ mod pubsub_client;
 mod stcscan_monitor;
 mod stcscan_monitor_index;
 mod telegram;
-mod types;
 
 use crate::daily_notification::DailyNotificationService;
 use crate::monitor_handler::default_monitor_handler::DefaultMonitorHandler;

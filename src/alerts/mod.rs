@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Infrastructure alerts: Main block production, payout settlement, bridge transfers, disk
-//! usage, pod crashes and Main seed lag. Each check runs on its own schedule in one thread and reports through the
+//! usage, pod crashes, Main seed lag, and chain-wide supply, Treasury, DAO and config changes. Each check runs on its own schedule in one thread and reports through the
 //! same Telegram bot as the large-transfer alerts.
 
 pub mod bridge;
 pub mod chain;
 pub mod disk;
+pub mod governance;
 pub mod kube;
 pub mod pods;
 pub mod rule;
@@ -44,6 +45,7 @@ const SEED_LAG: Rule = Rule {
     repeat: Duration::from_secs(1200),
 };
 const BRIDGE_EVERY: Duration = Duration::from_secs(300);
+const GOVERNANCE_EVERY: Duration = Duration::from_secs(120);
 const TICK: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -53,15 +55,17 @@ enum Check {
     Disk,
     Bridge,
     Pods,
+    Governance,
 }
 
 impl Check {
-    const ALL: [Check; 5] = [
+    const ALL: [Check; 6] = [
         Check::Block,
         Check::Settlement,
         Check::Disk,
         Check::Bridge,
         Check::Pods,
+        Check::Governance,
     ];
 
     fn every(self) -> Duration {
@@ -71,6 +75,7 @@ impl Check {
             Check::Disk => DISK.every,
             Check::Bridge => BRIDGE_EVERY,
             Check::Pods => POD.every,
+            Check::Governance => GOVERNANCE_EVERY,
         }
     }
 }
@@ -130,6 +135,7 @@ pub fn run(tg_bot: Arc<TelegramBot>) -> anyhow::Result<JoinHandle<()>> {
             info!("alerts | started");
             let mut alarms = HashMap::new();
             let mut bridge = bridge::Bridge::default();
+            let mut governance = governance::Governance::default();
             let mut due: HashMap<Check, UnixSecs> = HashMap::new();
             loop {
                 let t = now();
@@ -150,6 +156,7 @@ pub fn run(tg_bot: Arc<TelegramBot>) -> anyhow::Result<JoinHandle<()>> {
                         ),
                         Check::Disk => messages(&mut alarms, disk::check(&kube, t).await, t, &DISK),
                         Check::Bridge => bridge.run(&http, t).await,
+                        Check::Governance => governance.run(&http, t).await,
                         Check::Pods => {
                             let (pod, lag) = pods::check(&kube, &http, t).await;
                             let mut m = messages(&mut alarms, pod, t, &POD);

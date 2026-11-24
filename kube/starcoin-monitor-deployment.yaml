@@ -62,7 +62,7 @@ spec:
       serviceAccountName: starcoin-monitor
       containers:
         - name: starcoin-monitor
-          image: ghcr.io/starcoinorg/starcoin-monitor:sha-3074aeb
+          image: ghcr.io/starcoinorg/starcoin-monitor:sha-8b82a83
           imagePullPolicy: Always
           env:
             - name: STARCOIN_RPC_URL

@@ -1,7 +1,7 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Main block production and mining pool payout settlement.
+//! Main block production, mining pool settlement, and mining pool payouts.
 
 use super::rule::{Finding, UnixSecs};
 use anyhow::{Context, Result};
@@ -19,6 +19,14 @@ const SETTLEMENT_URL: &str =
     "http://starcoin-pool-service-svc.starcoin-main.svc.cluster.local/v1/mining/settlement-health";
 const MAX_SETTLEMENT_DELAY_BLOCKS: u64 = 120;
 const MAX_SETTLEMENT_BATCH_AGE_SECS: u64 = 600;
+/// The payout worker gates payouts until its verify checkpoint reaches the settled height.
+/// Settlement may advance 256 heights per tick and two ticks can land between two verify
+/// runs, so a healthy lag reaches 512. The 2026-11-22 stall grew past 17,000.
+const MAX_PAYOUT_VERIFY_LAG_BLOCKS: u64 = 600;
+/// A payout job normally goes from planned to debited within two ticks (about 4 minutes).
+const MAX_UNFINISHED_PAYOUT_AGE_SECS: u64 = 1800;
+/// The pool pays every 12 hours; two hours cover verify catch-up and confirmation.
+const MAX_PAYOUT_GAP_SECS: u64 = 14 * 3600;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Head {
@@ -87,6 +95,9 @@ pub struct Settlement {
     pub last_batch_age_secs: Option<u64>,
     pub pending_submits: Option<u64>,
     pub pending_candidates: Option<u64>,
+    pub payout_verified_height: Option<u64>,
+    pub oldest_unfinished_payout_age_secs: Option<u64>,
+    pub last_payout_confirmed_age_secs: Option<u64>,
 }
 
 pub fn settlement_problem(s: &Settlement) -> Option<String> {
@@ -109,6 +120,51 @@ pub fn settlement_problem(s: &Settlement) -> Option<String> {
     None
 }
 
+/// Why payouts are not going out, if they are not. Settlement can keep up while payouts
+/// stall, so this is judged apart from `settlement_problem`.
+///
+/// The verify lag is measured against the settled height. That is exact while the pool
+/// confirms blocks continuously, as it does on Main; the worker itself stops at the highest
+/// confirmed block.
+pub fn payout_problem(s: &Settlement) -> Option<String> {
+    // Without a settled height `main-settlement` already alerts.
+    let settled = s.last_settled_height?;
+    let Some(verified) = s.payout_verified_height else {
+        return Some("payout verify checkpoint missing".into());
+    };
+    if verified > settled {
+        return Some(format!(
+            "payout verify checkpoint {verified} is ahead of settled height {settled}; \
+             verify restarts from the oldest confirmed block and gates payouts"
+        ));
+    }
+    let lag = settled - verified;
+    if lag > MAX_PAYOUT_VERIFY_LAG_BLOCKS {
+        return Some(format!(
+            "payouts gated: verify is {lag} blocks behind settlement \
+             (> {MAX_PAYOUT_VERIFY_LAG_BLOCKS})"
+        ));
+    }
+    if let Some(age) = s.oldest_unfinished_payout_age_secs {
+        if age > MAX_UNFINISHED_PAYOUT_AGE_SECS {
+            return Some(format!(
+                "payout job unfinished for {age}s (> {MAX_UNFINISHED_PAYOUT_AGE_SECS}s)"
+            ));
+        }
+    }
+    let Some(gap) = s.last_payout_confirmed_age_secs else {
+        return Some("no confirmed payout on record".into());
+    };
+    if gap > MAX_PAYOUT_GAP_SECS {
+        return Some(format!(
+            "no payout confirmed for {gap}s (> {MAX_PAYOUT_GAP_SECS}s)"
+        ));
+    }
+    None
+}
+
+/// One fetch feeds two findings. A failed fetch reports only `main-settlement`, so a
+/// pool-service outage alerts once.
 pub async fn check_settlement(http: &reqwest::Client, _now: UnixSecs) -> Vec<Finding> {
     let fetched: Result<Settlement> = async {
         Ok(http
@@ -120,19 +176,20 @@ pub async fn check_settlement(http: &reqwest::Client, _now: UnixSecs) -> Vec<Fin
             .await?)
     }
     .await;
-    let finding = match fetched {
-        Ok(s) => Finding::new(
-            "main-settlement",
-            settlement_problem(&s),
-            serde_json::to_string(&s).unwrap_or_default(),
-        ),
-        Err(e) => Finding::new(
+    match fetched {
+        Ok(s) => {
+            let detail = serde_json::to_string(&s).unwrap_or_default();
+            vec![
+                Finding::new("main-settlement", settlement_problem(&s), detail.clone()),
+                Finding::new("main-payout", payout_problem(&s), detail),
+            ]
+        }
+        Err(e) => vec![Finding::new(
             "main-settlement",
             Some(format!("settlement health fetch failed: {e}")),
             "",
-        ),
-    };
-    vec![finding]
+        )],
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +242,95 @@ mod tests {
             settlement_problem(&Settlement::default()).unwrap(),
             "settlement checkpoint missing"
         );
+    }
+
+    fn paying() -> Settlement {
+        Settlement {
+            last_settled_height: Some(33_784_128),
+            payout_verified_height: Some(33_784_095),
+            oldest_unfinished_payout_age_secs: None,
+            last_payout_confirmed_age_secs: Some(3_600),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn healthy_payouts_have_no_problem() {
+        assert_eq!(payout_problem(&paying()), None);
+        // Settlement catching up 256 heights per tick, two ticks ahead of verify.
+        let catching_up = Settlement {
+            payout_verified_height: Some(33_784_128 - 512),
+            ..paying()
+        };
+        assert_eq!(payout_problem(&catching_up), None);
+        // A job planned this tick.
+        let just_planned = Settlement {
+            oldest_unfinished_payout_age_secs: Some(120),
+            ..paying()
+        };
+        assert_eq!(payout_problem(&just_planned), None);
+    }
+
+    #[test]
+    fn stalled_verify_is_a_problem() {
+        // The 2026-11-22 stall, as first seen on 11-24.
+        let stalled = Settlement {
+            last_settled_height: Some(33_782_558),
+            payout_verified_height: Some(33_765_325),
+            ..paying()
+        };
+        let problem = payout_problem(&stalled).unwrap();
+        assert!(problem.contains("17233 blocks behind"), "{problem}");
+        let barely = Settlement {
+            payout_verified_height: Some(33_784_128 - 601),
+            ..paying()
+        };
+        assert!(payout_problem(&barely).is_some());
+    }
+
+    #[test]
+    fn checkpoint_trouble_is_a_problem() {
+        let missing = Settlement {
+            payout_verified_height: None,
+            ..paying()
+        };
+        assert_eq!(
+            payout_problem(&missing).unwrap(),
+            "payout verify checkpoint missing"
+        );
+        let ahead = Settlement {
+            payout_verified_height: Some(33_784_129),
+            ..paying()
+        };
+        assert!(payout_problem(&ahead).unwrap().contains("ahead of settled"));
+    }
+
+    #[test]
+    fn stuck_or_absent_payouts_are_a_problem() {
+        let stuck = Settlement {
+            oldest_unfinished_payout_age_secs: Some(1_801),
+            ..paying()
+        };
+        assert!(payout_problem(&stuck).unwrap().contains("unfinished"));
+        let overdue = Settlement {
+            last_payout_confirmed_age_secs: Some(14 * 3600 + 1),
+            ..paying()
+        };
+        assert!(payout_problem(&overdue)
+            .unwrap()
+            .contains("no payout confirmed"));
+        let never = Settlement {
+            last_payout_confirmed_age_secs: None,
+            ..paying()
+        };
+        assert_eq!(
+            payout_problem(&never).unwrap(),
+            "no confirmed payout on record"
+        );
+    }
+
+    #[test]
+    fn missing_settled_height_is_left_to_the_settlement_alert() {
+        assert_eq!(payout_problem(&Settlement::default()), None);
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Infrastructure alerts: Main block production, payout settlement, bridge transfers, disk
+//! Infrastructure alerts: Main block production, pool settlement and payouts, bridge transfers, disk
 //! usage, pod crashes, Main seed lag, and chain-wide supply, Treasury, DAO and config changes. Each check runs on its own schedule in one thread and reports through the
 //! same Telegram bot as the large-transfer alerts.
 

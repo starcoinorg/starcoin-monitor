@@ -10,7 +10,8 @@ A comprehensive monitoring service for the Starcoin blockchain that tracks large
 - 📊 **Query Capabilities**: Query transactions by block range, get summaries, and check balances
 - 🚀 **PubSub Support**: Real-time event-driven monitoring using WebSocket subscriptions
 - 🩺 **Infrastructure alerts** (`src/alerts/`, in-cluster only): Main block production stalled
-  over 20 minutes, mining pool payout settlement delayed, native bridge deposits unclaimed after
+  over 20 minutes, mining pool settlement delayed, mining pool payouts gated, stuck or
+  overdue, native bridge deposits unclaimed after
   2 hours, and any node root disk or mounted PVC at 85% or more. Disk usage needs the RBAC in
   `kube/starcoin-monitor-deployment.yaml` (`list nodes`, `get nodes/proxy`).
 
